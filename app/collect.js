@@ -25,9 +25,24 @@
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
   const tx = async (mode, fn) => { const db = await dbp; return new Promise((res, rej) => { const t = db.transaction("shots", mode); const q = fn(t.objectStore("shots")); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
-  const saveShots = (key, blobs) => tx("readwrite", s => { const t = Date.now(); blobs.forEach((b, i) => s.add({ key, blob: b, t: t + i })); });
-  const allShots = () => tx("readonly", s => s.getAll());
-  const clearAll = () => tx("readwrite", s => s.clear());
+  // iPhone Safari can refuse to store Blob objects, so photos are stored as raw bytes.
+  // If storage fails completely, photos are kept in memory for this visit (download before closing the tab).
+  const memory = []; let memoryOnly = false;
+  const saveShots = async (key, blobs) => {
+    const t = Date.now();
+    const rows = await Promise.all(blobs.map(async (b, i) => ({ key, bytes: await b.arrayBuffer(), type: b.type || "image/jpeg", t: t + i })));
+    if (!memoryOnly) {
+      try { await tx("readwrite", s => rows.forEach(r => s.add(r))); return; }
+      catch (e) { console.warn("Storage failed, keeping photos in memory", e); memoryOnly = true; }
+    }
+    memory.push(...rows);
+  };
+  const allShots = async () => {
+    let stored = [];
+    try { stored = await tx("readonly", s => s.getAll()) || []; } catch (e) { memoryOnly = true; }
+    return [...stored, ...memory].map(r => ({ key: r.key, t: r.t, blob: r.blob || new Blob([r.bytes], { type: r.type || "image/jpeg" }) }));
+  };
+  const clearAll = async () => { memory.length = 0; try { await tx("readwrite", s => s.clear()); } catch (e) {} };
 
   // ---------- UI ----------
   document.head.insertAdjacentHTML("beforeend", `<style>
@@ -80,6 +95,7 @@
       <h3>Which chocolate are you recording?</h3>
       <div class="cl-bar"><i style="width:${doneN() / KEYS.length * 100}%"></i></div>
       <p class="muted">${doneN()} of ${KEYS.length} done${nk ? ` · next up: ${LONG(nk)}` : " · all done!"}. A second round somewhere else (another room or light) makes it even better.</p>
+      ${memoryOnly ? `<p class="cl-err">This phone isn't letting the page store photos, so they're only kept while this tab is open. Download the zip before closing it.</p>` : ""}
       <div class="cl-grid">${KEYS.map(k => `<button class="cl-tile ${k.length > 2 ? "wide" : ""} ${counts[k] ? "done" : ""} ${k === nk ? "cl-next" : ""}" data-k="${k}" type="button">${SHORT(k)}</button>`).join("")}</div>
       <button class="btn btn-light" id="clZip" type="button" ${total ? "" : "disabled"}>Download all photos (.zip)${total ? " · " + total : ""}</button>
       <button class="cl-link" id="clClear" type="button">Delete all collected photos</button>
@@ -164,8 +180,11 @@
       </div>
     </div>`;
     root.querySelector("#clRetake").onclick = () => showRecord(current);
-    root.querySelector("#clSave").onclick = async () => {
-      await saveShots(current, takes); takes = [];
+    root.querySelector("#clSave").onclick = async e => {
+      const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Saving…";
+      try { await saveShots(current, takes); }
+      catch (err) { btn.disabled = false; btn.textContent = "Save"; root.querySelector(".muted").textContent = "Couldn't save: " + (err && (err.message || err.name) || err) + ". Take a screenshot and send it to Claude."; return; }
+      takes = [];
       await refreshCounts();
       const nk = nextKey();
       root.innerHTML = `<div class="cl-screen">
