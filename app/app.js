@@ -12,8 +12,8 @@
   };
   // Recognition settings
   const CROP = 0.70;        // the framing square is the middle 70% of the camera view
-  const SURE = 0.75;        // score needed to count a frame as a match
-  const STEADY = 4;         // matching frames in a row before we show the result
+  const SURE = 0.50;        // score needed to count a frame as a match
+  const STEADY = 3;         // matching frames in a row before we show the result
   const PHOTO_SURE = 0.45;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
