@@ -110,11 +110,18 @@
   }
 
   // ---------- camera ----------
+  // iPhone Safari pauses (and blanks) a video when it's moved to a new screen,
+  // so the picture is re-attached and restarted every time a chocolate is opened.
   async function ensureCamera() {
-    if (stream && stream.active) return true;
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-    video.srcObject = stream; await video.play();
-    if (!video.videoWidth) await new Promise(r => video.onloadedmetadata = r);
+    if (!stream || !stream.active || stream.getVideoTracks().every(t => t.readyState === "ended")) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    }
+    video.srcObject = null;
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    if (!video.videoWidth) await new Promise(r => { video.onloadedmetadata = r; setTimeout(r, 3000); });
+    await video.play().catch(() => {});
+    if (!video.videoWidth) throw Object.assign(new Error("no picture"), { name: "NoPicture" });
     return true;
   }
   function grab() {
@@ -131,7 +138,7 @@
       <h3>${LONG(key)}</h3>
       <div class="cl-cam" id="clCam"><span class="cl-dot" id="clDot">Ready</span><div class="sq"></div><div class="ring"></div><div class="cl-say" id="clSay">${key === "none" ? "Point at the empty box or the table" : "Put the chocolate in the circle"}</div></div>
       <p class="muted">${key === "none" ? "No chocolate in view. Takes about 9 seconds." : "Follow the prompts on screen. It takes about 9 seconds."}</p>
-      <button class="btn btn-light" id="clGo" type="button">Start recording</button>
+      <button class="btn btn-light" id="clGo" type="button" disabled>Starting camera…</button>
       <p class="cl-err" id="clErr"></p>
     </div>`;
     root.querySelector("#clCam").prepend(video);
@@ -141,10 +148,11 @@
     catch (e) {
       err.textContent = e.name === "NotAllowedError"
         ? "Camera access is blocked. Tap “aA” in Safari's address bar → Website Settings → Camera → Allow, then reload."
+        : e.name === "NoPicture" ? "The camera picture didn't start. Tap ← All chocolates and open this one again."
         : "The camera couldn't start (" + e.name + "). Close other apps using the camera and reload.";
       go.disabled = true; return;
     }
-    go.onclick = record;
+    go.onclick = record; go.disabled = false; go.textContent = "Start recording";
   }
 
   async function record() {
