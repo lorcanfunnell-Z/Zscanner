@@ -44,8 +44,9 @@ window.Recognizer = (() => {
     });
     pics.forEach(t => t.dispose());
     const all = out.arraySync(); out.dispose();
+    const real = row => Math.max(...row.filter((_, i) => labels[i] !== "none"));
     let bestRow = all[0];
-    for (const row of all) if (Math.max(...row) > Math.max(...bestRow)) bestRow = row;
+    for (const row of all) if (real(row) > real(bestRow)) bestRow = row;
     return bestRow.map((p, i) => ({ key: labels[i], p })).sort((a, b) => b.p - a.p);
   }
 

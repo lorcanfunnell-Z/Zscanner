@@ -12,8 +12,8 @@
   };
   // Recognition settings
   const CROP = 0.70;        // the framing square is the middle 70% of the camera view
-  const SURE = 0.60;        // score needed to count a frame as a match
-  const STEADY = 3;         // matching frames in a row before we show the result
+  const SURE = 0.75;        // score needed to count a frame as a match
+  const STEADY = 4;         // matching frames in a row before we show the result
   const PHOTO_SURE = 0.45;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
@@ -128,7 +128,7 @@
     if (!stream) return;
     if (video.readyState >= 2) {
       const top = Recognizer.classify(video, cropBox(video.videoWidth, video.videoHeight, CROP))[0];
-      if (top.p >= SURE) {
+      if (top.key !== "none" && C[top.key] && top.p >= SURE) {
         streak = top.key === streak.key ? { key: top.key, n: streak.n + 1 } : { key: top.key, n: 1 };
         $("#hint").textContent = "Hold still";
         if (streak.n >= STEADY) {
@@ -160,7 +160,7 @@
         for (let y = 0; y + size <= H + 1; y += step) for (let x = 0; x + size <= W + 1; x += step)
           boxes.push({ x: Math.round(Math.min(x, W - size)), y: Math.round(Math.min(y, H - size)), size });
       }
-      const best = Recognizer.classifyBest(img, boxes);
+      const best = Recognizer.classifyBest(img, boxes).filter(b => C[b.key]);
       if (best[0].p >= PHOTO_SURE) {
         render(best[0].key, { scanned: true });
         setStatus(`<img class="thumb" src="${url}" alt=""><span>Found: ${esc(label(best[0].key))}</span>`);
