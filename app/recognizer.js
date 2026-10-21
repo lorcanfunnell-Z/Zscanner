@@ -63,5 +63,8 @@ window.Recognizer = (() => {
     return out.sort((a, b) => b.ranked[0].p - a.ranked[0].p)[0] || null;
   }
 
-  return { load, scan, scanPhoto, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
+  // the last close-up the reader looked at (for the debug test log)
+  const snapshot = () => canvas.toDataURL("image/jpeg", 0.85);
+
+  return { load, scan, scanPhoto, snapshot, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
 })();

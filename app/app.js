@@ -111,7 +111,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0;
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null;
     loop();
   }
 
@@ -127,6 +127,18 @@
   const mark = $("#mark");
   const DEBUG = /[?&]debug\b/.test(location.search);
   let held = [], holdStart = 0;            // frames collected during the current hold
+  let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
+  const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
+  function frameShot() {   // what the camera saw (centre square), small, for the test log
+    const c = document.createElement("canvas"); c.width = c.height = 320;
+    const w = video.videoWidth, h = video.videoHeight, s = Math.min(w, h);
+    c.getContext("2d").drawImage(video, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 320, 320);
+    return c.toDataURL("image/jpeg", 0.8);
+  }
+  function report(type, guess) {
+    if (!DEBUG || !lastInfo) return;
+    window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart), crop: Recognizer.snapshot(), frame: frameShot() } }));
+  }
   function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
     const s = r.box.size * 1.25;
@@ -135,6 +147,7 @@
     mark.hidden = false; mark.dataset.label = "";
   }
   function answer(key) {
+    report("answer", key);
     viewer.classList.add("locked");
     setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
@@ -163,6 +176,9 @@
         const [topKey, topP] = Object.entries(avg).sort((a, b) => b[1] - a[1])[0];
         const count = v => held.filter(f => f.shell === v).length;
         const shellVote = ["dark", "milk", "white", "milkwhite"].sort((a, b) => count(b) - count(a))[0];
+        const mcount = v => held.filter(f => f.mark === v).length;
+        lastInfo = { avgTop3: top3(avg), nowTop3: r.ranked.slice(0, 3).map(x => ({ key: x.key, p: Math.round(x.p * 1000) / 10 })), shell: shellVote,
+          mark: ["one", "two", "z"].sort((a, b) => mcount(b) - mcount(a))[0], frames: held.length, holdMs: Math.round(t0 - holdStart) };
         if (DEBUG) $("#hint").textContent = `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f`;
         if (progress >= 1 && held.length >= 3 && topP >= DECIDE && META.shellOf[topKey] === shellVote) { answer(topKey); return; }
       } else {
@@ -202,7 +218,7 @@
   }
 
   $("#camBtn").onclick = () => canLive ? startCamera() : $("#photoInput").click();
-  $("#stopBtn").onclick = () => stopCamera("Scan a chocolate");
+  $("#stopBtn").onclick = () => { report("noanswer", null); stopCamera("Scan a chocolate"); };
   $("#photoBtn").onclick = () => $("#photoInput").click();
   $("#photoInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; fromPhoto(f); };
   document.addEventListener("visibilitychange", () => { if (document.hidden && stream) stopCamera("Scan a chocolate"); });
