@@ -11,9 +11,9 @@
     white: { label: "White couverture", sw: "var(--white-c)" }
   };
   // Recognition settings
-  const INSTANT = 0.90;     // one clear frame this sure → answer straight away
-  const SETTLED = 0.80;     // or: the running average of recent frames this sure (needs at least 3 frames)
-  const MEMORY = 0.6;       // how much each new frame keeps of the running average (higher = smoother, slower)
+  const HOLD_MS = 1000;     // hold the camera over the chocolate this long before it decides
+  const MOVE_LIMIT = 0.22;  // if the chocolate moves more than this (share of the view), the hold restarts
+  const DECIDE = 0.50;      // average score over the held second needed to answer
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
@@ -87,7 +87,7 @@
 
   // ---------- Live camera ----------
   const video = $("#video"), viewer = $("#viewer");
-  let stream = null, timer = null, avg = null, frames = 0, lastSeen = 0;
+  let stream = null, timer = null, lastSeen = 0;
   let canLive = !!(navigator.mediaDevices?.getUserMedia) && window.isSecureContext;
   function noLiveCamera(msg) {
     canLive = false;
@@ -111,7 +111,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    avg = null; frames = 0; lastSeen = 0; leader = null;
+    held = []; holdStart = 0; lastSeen = 0;
     loop();
   }
 
@@ -121,27 +121,24 @@
     viewer.hidden = true; $(".actions").hidden = false; $("#camLabel").textContent = label;
   }
 
-  // Live scanning: every frame, find the chocolate and read it. Answer at once if one frame is clear;
-  // otherwise keep a running average of recent frames so a wobble doesn't start everything again.
+  // Live scanning: the person holds the camera over one chocolate for HOLD_MS. A line fills up around the box
+  // as a countdown; moving away restarts it. Then every frame from that second is averaged, and the answer is
+  // given only if the winner's shell colour matches what most frames saw (the logic check).
   const mark = $("#mark");
-  function showMark(r, guess) {
+  const DEBUG = /[?&]debug\b/.test(location.search);
+  let held = [], holdStart = 0;            // frames collected during the current hold
+  function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
     const s = r.box.size * 1.25;
     Object.assign(mark.style, { left: (r.box.cx - s / 2) * 100 + "%", top: (r.box.cy - s / 2) * 100 + "%", width: s * 100 + "%", height: s * 100 + "%" });
-    mark.hidden = false; mark.dataset.label = guess || "";
+    mark.style.setProperty("--progress", Math.min(1, progress));
+    mark.hidden = false; mark.dataset.label = "";
   }
-  // Answering rules (any one is enough):
-  //  • instant: one clear frame, 90%+ sure, and its shell colour and digit count agree
-  //  • settled: the running average is 80%+ sure and agrees
-  //  • steady: the same chocolate has stayed on top for STEADY_MS (half a second), at least 40% on average,
-  //    and the shell colour (99% reliable) agrees
-  const STEADY_MS = 500;
-  const DEBUG = /[?&]debug\b/.test(location.search);
-  let leader = null, leaderSince = 0;
   function answer(key) {
     viewer.classList.add("locked");
-    setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 200);
+    setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
+  function resetHold(t) { held = []; holdStart = t; }
 
   function loop() {
     if (!stream) return;
@@ -149,26 +146,29 @@
     if (video.readyState >= 2) {
       const r = Recognizer.scan(video);
       if (r.found) {
-        lastSeen = t0; frames++;
-        const p = Object.fromEntries(r.ranked.map(x => [x.key, x.p]));
-        avg = avg ? Object.fromEntries(Object.keys(p).map(k => [k, avg[k] * MEMORY + p[k] * (1 - MEMORY)])) : p;
+        lastSeen = t0;
+        // restart the countdown if the chocolate jumped (camera still being moved into place)
+        if (held.length) {
+          const mx = held.reduce((s, f) => s + f.cx, 0) / held.length, my = held.reduce((s, f) => s + f.cy, 0) / held.length;
+          if (Math.hypot(r.box.cx - mx, r.box.cy - my) > MOVE_LIMIT) resetHold(t0);
+        } else holdStart = t0;
+        held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark });
+        held = held.filter((f, i) => t0 - f.t <= HOLD_MS * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
+        const progress = (t0 - holdStart) / HOLD_MS;
+        showMark(r, progress);
+        $("#hint").textContent = progress < 1 ? "Hold still over the chocolate" : "Reading the number…";
+        // average every frame in the window
+        const keys = Object.keys(held[0].p), avg = {};
+        keys.forEach(k => avg[k] = held.reduce((s, f) => s + f.p[k], 0) / held.length);
         const [topKey, topP] = Object.entries(avg).sort((a, b) => b[1] - a[1])[0];
-        if (topKey !== leader) { leader = topKey; leaderSince = t0; }
-        const held = t0 - leaderSince;
-        const agrees = k => r.shell === META.shellOf[k] && r.mark === META.markOf[k];
-        const shellOk = k => r.shell === META.shellOf[k];
-        const instant = r.ranked[0].p >= INSTANT && agrees(r.ranked[0].key);
-        const settled = frames >= 3 && topP >= SETTLED && agrees(topKey);
-        const steady = held >= STEADY_MS && topP >= 0.40 && shellOk(topKey);
-        const guess = topP > 0.3 ? label(topKey).split(" ")[0] : "";
-        showMark(r, guess);
-        $("#hint").textContent = guess ? "Reading…" : "Got it, reading the number…";
-        if (DEBUG) $("#hint").textContent = `${r.ranked.slice(0, 3).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${r.shell} ${r.mark} | ${Math.round(held)}ms`;
-        if (instant || settled || steady) { answer(instant ? r.ranked[0].key : topKey); return; }
+        const count = v => held.filter(f => f.shell === v).length;
+        const shellVote = ["dark", "milk", "white", "milkwhite"].sort((a, b) => count(b) - count(a))[0];
+        if (DEBUG) $("#hint").textContent = `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f`;
+        if (progress >= 1 && held.length >= 3 && topP >= DECIDE && META.shellOf[topKey] === shellVote) { answer(topKey); return; }
       } else {
         showMark(null);
-        if (t0 - lastSeen > 1200) { avg = null; frames = 0; leader = null; }   // forget only after a second with no chocolate
-        $("#hint").textContent = "Point the camera at one chocolate";
+        if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again
+        $("#hint").textContent = "Hold the camera above one chocolate, number visible";
       }
     }
     timer = setTimeout(loop, Math.max(0, 60 - (performance.now() - t0)));
