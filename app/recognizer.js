@@ -29,6 +29,13 @@ window.Recognizer = (() => {
     ctx.drawImage(source, x, y, size, size, 0, 0, S, S);
     return tf.browser.fromPixels(canvas).toFloat().div(127.5).sub(1);
   }
+  // Sharpness of what's on the canvas (variance of the Laplacian, same measure as the test analysis).
+  // Below ~45 the pressed number can't be read, so those frames are skipped.
+  const LAP = tf.tensor4d([0, 1, 0, 1, -4, 1, 0, 1, 0], [3, 3, 1, 1]);
+  const sharpness = () => tf.tidy(() => {
+    const g = tf.browser.fromPixels(canvas).toFloat().mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(2).expandDims(0).expandDims(-1);
+    return tf.moments(tf.conv2d(g, LAP, 1, "valid")).variance.dataSync()[0];
+  });
   const srcSize = s => ({ w: s.videoWidth || s.naturalWidth || s.width, h: s.videoHeight || s.naturalHeight || s.height });
 
   // the logic step: chocolate score × shell score × mark score, renormalised
@@ -47,9 +54,11 @@ window.Recognizer = (() => {
     const box = { cx, cy, size: Math.max(0.08, bs) };
     if (obj < 0.5) return { found: false, obj, box };
     const side = box.size * meta.readerPad * sq.size;
-    const rd = tf.tidy(() => reader.predict(grab(source, sq.x + cx * sq.size - side / 2, sq.y + cy * sq.size - side / 2, side).expandDims(0)));
+    const crop = grab(source, sq.x + cx * sq.size - side / 2, sq.y + cy * sq.size - side / 2, side);
+    const sharp = sharpness();
+    const rd = tf.tidy(() => reader.predict(crop.expandDims(0))); crop.dispose();
     const [pid, psh, pmk] = rd.map(t => Array.from(t.dataSync())); tf.dispose(rd);
-    return { found: true, obj, box, ranked: combine(pid, psh, pmk), shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+    return { found: true, obj, box, sharp, ranked: combine(pid, psh, pmk), shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
   // For still photos: try a few squares along the long side and keep the most confident result

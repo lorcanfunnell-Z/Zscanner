@@ -9,18 +9,20 @@
   const SHORT = k => k === "none" ? "Nothing" : k === "zdark" ? "Z dark" : k === "zmilk" ? "Z milk" : k === "zwhite" ? "Z white" : k;
   const LONG = k => k === "none" ? "Nothing (empty box, table, hand)" : C[k].z ? C[k].name : `N°${k} ${C[k].name}`;
   // Guided recording: each step shows a prompt while frames are taken
+  // Round 2: real scanning conditions. The chocolate stays where it is (table, box, any light);
+  // the phone moves the way someone would naturally scan it.
   const STEPS = [
-    { say: "Hold it still in the circle", n: 12 },
-    { say: "Slowly tilt it left and right", n: 12 },
-    { say: "Slowly turn it a little", n: 10 },
-    { say: "Move the phone closer, then further", n: 11 }
+    { say: "Hold the phone above it, as if scanning", n: 12 },
+    { say: "Tilt the phone a little each way", n: 11 },
+    { say: "Move a little closer, then further away", n: 11 },
+    { say: "Move it to another part of the screen", n: 11 }
   ];
   const NOTHING_STEPS = [{ say: "Point at the empty box or table and move around slowly", n: 45 }];
-  const EVERY_MS = 200, SAVE_SHARE = 0.85, SIZE = 384;
+  const EVERY_MS = 200, SAVE_SHARE = 1.0, SIZE = 640;   // the whole camera square, high resolution (what the live scanner sees)
 
   // ---------- storage ----------
   const dbp = new Promise((res, rej) => {
-    const r = indexedDB.open("zscanner-collect", 1);
+    const r = indexedDB.open("zscanner-collect-2", 1);   // round 2 starts with a fresh set
     r.onupgradeneeded = () => r.result.createObjectStore("shots", { autoIncrement: true });
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
@@ -116,7 +118,7 @@
   // so the picture is re-attached and restarted every time a chocolate is opened.
   async function ensureCamera() {
     if (!stream || !stream.active || stream.getVideoTracks().every(t => t.readyState === "ended")) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1920 } }, audio: false });
     }
     video.srcObject = null;
     video.srcObject = stream;
@@ -138,7 +140,7 @@
     root.innerHTML = `<div class="cl-screen">
       <button class="cl-link" id="clBack" type="button" style="align-self:flex-start">← All chocolates</button>
       <h3>${LONG(key)}</h3>
-      <div class="cl-cam" id="clCam"><span class="cl-dot" id="clDot">Ready</span><div class="sq"></div><div class="ring"></div><div class="cl-say" id="clSay">${key === "none" ? "Point at the empty box or the table" : "Put the chocolate in the circle"}</div></div>
+      <div class="cl-cam" id="clCam"><span class="cl-dot" id="clDot">Ready</span><div class="cl-say" id="clSay">${key === "none" ? "Point at the empty box or the table" : "Hold the phone above the chocolate"}</div></div>
       <p class="muted">${key === "none" ? "No chocolate in view. Takes about 9 seconds." : "Follow the prompts on screen. It takes about 9 seconds."}</p>
       <button class="btn btn-light" id="clGo" type="button" disabled>Starting camera…</button>
       <p class="cl-err" id="clErr"></p>
@@ -214,9 +216,9 @@
     const btn = e.target, shots = await allShots(); if (!shots.length) return;
     btn.textContent = "Preparing zip…"; btn.disabled = true;
     const zip = new JSZip(), n = {};
-    shots.forEach(s => { n[s.key] = (n[s.key] || 0) + 1; zip.file(`${s.key}/cam_${s.t}.jpg`, s.blob); });
+    shots.forEach(s => { n[s.key] = (n[s.key] || 0) + 1; zip.file(`${s.key}/cam2_${s.t}.jpg`, s.blob); });
     const blob = await zip.generateAsync({ type: "blob" });
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `zscanner-photos-${new Date().toISOString().slice(0, 10)}.zip` });
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `zscanner-photos-round2-${new Date().toISOString().slice(0, 10)}.zip` });
     document.body.append(a); a.click(); a.remove();
     btn.disabled = false; btn.textContent = `Download all photos (.zip) · ${shots.length}`;
   }

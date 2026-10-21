@@ -13,7 +13,10 @@
   // Recognition settings
   const HOLD_MS = 1000;     // hold the camera over the chocolate this long before it decides
   const MOVE_LIMIT = 0.22;  // if the chocolate moves more than this (share of the view), the hold restarts
-  const DECIDE = 0.50;      // average score over the held second needed to answer
+  const DECIDE = 0.65;      // average score over the held second needed to answer
+  const MARGIN = 0.30;      // ...and this far ahead of the second guess
+  const MIN_SHARP = 45;     // close-ups less sharp than this are skipped (the number can't be read)
+  const MIN_SIZE = 0.13;    // chocolate smaller than this share of the view: ask to move closer
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
@@ -99,7 +102,7 @@
   async function startCamera() {
     if (!(await ensureModel())) return;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 1280 } }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1920 } }, audio: false });
     } catch (e) {
       noLiveCamera(e.name === "NotAllowedError"
         ? "Live scanning is not available here. Tap “Take a photo” to photograph your chocolate instead."
@@ -158,14 +161,20 @@
     const t0 = performance.now();
     if (video.readyState >= 2) {
       const r = Recognizer.scan(video);
-      if (r.found) {
+      const tooSmall = r.found && r.box.size < MIN_SIZE, blurry = r.found && r.sharp < MIN_SHARP;
+      if (r.found && (tooSmall || blurry)) {
+        // seen, but not readable: don't count this frame, and say what to do
+        lastSeen = t0; showMark(r, 0);
+        $("#hint").textContent = tooSmall ? "Move a little closer" : "Too blurry, hold steady";
+        if (DEBUG) $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}%`;
+      } else if (r.found) {
         lastSeen = t0;
         // restart the countdown if the chocolate jumped (camera still being moved into place)
         if (held.length) {
           const mx = held.reduce((s, f) => s + f.cx, 0) / held.length, my = held.reduce((s, f) => s + f.cy, 0) / held.length;
           if (Math.hypot(r.box.cx - mx, r.box.cy - my) > MOVE_LIMIT) resetHold(t0);
         } else holdStart = t0;
-        held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark });
+        held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, sharp: r.sharp, p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark });
         held = held.filter((f, i) => t0 - f.t <= HOLD_MS * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
         const progress = (t0 - holdStart) / HOLD_MS;
         showMark(r, progress);
@@ -173,14 +182,17 @@
         // average every frame in the window
         const keys = Object.keys(held[0].p), avg = {};
         keys.forEach(k => avg[k] = held.reduce((s, f) => s + f.p[k], 0) / held.length);
-        const [topKey, topP] = Object.entries(avg).sort((a, b) => b[1] - a[1])[0];
+        const sorted = Object.entries(avg).sort((a, b) => b[1] - a[1]);
+        const [topKey, topP] = sorted[0], secondP = sorted[1] ? sorted[1][1] : 0;
         const count = v => held.filter(f => f.shell === v).length;
         const shellVote = ["dark", "milk", "white", "milkwhite"].sort((a, b) => count(b) - count(a))[0];
         const mcount = v => held.filter(f => f.mark === v).length;
         lastInfo = { avgTop3: top3(avg), nowTop3: r.ranked.slice(0, 3).map(x => ({ key: x.key, p: Math.round(x.p * 1000) / 10 })), shell: shellVote,
           mark: ["one", "two", "z"].sort((a, b) => mcount(b) - mcount(a))[0], frames: held.length, holdMs: Math.round(t0 - holdStart) };
-        if (DEBUG) $("#hint").textContent = `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f`;
-        if (progress >= 1 && held.length >= 3 && topP >= DECIDE && META.shellOf[topKey] === shellVote) { answer(topKey); return; }
+        if (DEBUG) $("#hint").textContent = `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)}`;
+        const markVote = lastInfo.mark;
+        if (progress >= 1 && held.length >= 3 && topP >= DECIDE && topP - secondP >= MARGIN
+            && META.shellOf[topKey] === shellVote && META.markOf[topKey] === markVote) { answer(topKey); return; }
       } else {
         showMark(null);
         if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again
