@@ -21,7 +21,7 @@
 
   const $ = s => document.querySelector(s);
   let META = { shellOf: {}, markOf: {} };
-  fetch("model2/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
+  fetch("model3/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function utm(url, content) {

@@ -1,0 +1,26 @@
+{
+  "trainedAt": "2026-10-21T09:34:32.527Z",
+  "testsUsedForTraining": true,
+  "heldBack": {
+    "label": "held-back recording photos",
+    "n": 327,
+    "right": "84%",
+    "inTop3": "97%",
+    "shellRight": "98%",
+    "digitsRight": "96%",
+    "wouldAnswer": "75%",
+    "rightWhenAnswering": "96%",
+    "mistakes": "2→9 2→9 2→9 2→9 2→9 5→1 5→1 5→1 6→5 6→3 6→3 6→3 8→7 8→6 13→19 14→11 14→11 14→11 15→13 15→13 15→13 15→13 15→13 16→9 16→12 16→24 18→1 18→13 18→13 18→23 19→21 20→16 20→16 20→11 20→2 20→16 20→24 20→24 22→12 22→12 22→12 23→3 23→19 23→19 24→11 24→12 24→12 zmilk→14 zmilk→14 zmilk→14 zmilk→11 zmilk→11 zmilk→12"
+  },
+  "realTests": {
+    "label": "real test scans (trained on, not a fair check)",
+    "n": 56,
+    "right": "66%",
+    "inTop3": "91%",
+    "shellRight": "95%",
+    "digitsRight": "91%",
+    "wouldAnswer": "41%",
+    "rightWhenAnswering": "87%",
+    "mistakes": "2→9 8→6 10→1 12→16 13→17 16→15 18→21 19→17 23→19 zdark→17 2→9 3→13 4→16 8→5 11→7 12→14 18→1 21→19 24→16"
+  }
+}

@@ -14,9 +14,9 @@ window.Recognizer = (() => {
     if (!loading) loading = (async () => {
       await tf.ready();
       [finder, reader, meta] = await Promise.all([
-        tf.loadLayersModel("model2/finder/model.json"),
-        tf.loadLayersModel("model2/reader/model.json"),
-        fetch("model2/meta.json").then(r => r.json())
+        tf.loadLayersModel("model3/finder/model.json"),
+        tf.loadLayersModel("model3/reader/model.json"),
+        fetch("model3/meta.json").then(r => r.json())
       ]);
       tf.tidy(() => { finder.predict(tf.zeros([1, S, S, 3])); reader.predict(tf.zeros([1, S, S, 3])); }); // warm up
     })();
