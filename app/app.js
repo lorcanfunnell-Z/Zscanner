@@ -11,12 +11,14 @@
     white: { label: "White couverture", sw: "var(--white-c)" }
   };
   // Recognition settings
-  const CROP = 0.70;        // the framing square is the middle 70% of the camera view
-  const SURE = 0.50;        // score needed to count a frame as a match
-  const STEADY = 3;         // matching frames in a row before we show the result
-  const PHOTO_SURE = 0.45;  // single photos: show the top match above this, else offer choices
+  const INSTANT = 0.90;     // one clear frame this sure → answer straight away
+  const SETTLED = 0.80;     // or: the running average of recent frames this sure (needs at least 3 frames)
+  const MEMORY = 0.6;       // how much each new frame keeps of the running average (higher = smoother, slower)
+  const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
+  let META = { shellOf: {}, markOf: {} };
+  fetch("model2/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function utm(url, content) {
@@ -85,7 +87,7 @@
 
   // ---------- Live camera ----------
   const video = $("#video"), viewer = $("#viewer");
-  let stream = null, timer = null, streak = { key: null, n: 0 };
+  let stream = null, timer = null, avg = null, frames = 0, lastSeen = 0;
   let canLive = !!(navigator.mediaDevices?.getUserMedia) && window.isSecureContext;
   function noLiveCamera(msg) {
     canLive = false;
@@ -93,11 +95,6 @@
     setStatus(msg);
   }
   if (!canLive) $("#camLabel").textContent = "Take a photo";
-
-  function cropBox(w, h, share) {
-    const side = Math.min(w, h), size = Math.round(side * share);
-    return { x: Math.round((w - size) / 2), y: Math.round((h - size) / 2), size };
-  }
 
   async function startCamera() {
     if (!(await ensureModel())) return;
@@ -112,9 +109,9 @@
     video.srcObject = stream; await video.play();
     viewer.hidden = false; viewer.classList.remove("locked");
     $(".actions").hidden = true;
-    $("#hint").textContent = "Fill the circle with the top of one chocolate";
+    $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    streak = { key: null, n: 0 };
+    avg = null; frames = 0; lastSeen = 0;
     loop();
   }
 
@@ -124,25 +121,44 @@
     viewer.hidden = true; $(".actions").hidden = false; $("#camLabel").textContent = label;
   }
 
+  // Live scanning: every frame, find the chocolate and read it. Answer at once if one frame is clear;
+  // otherwise keep a running average of recent frames so a wobble doesn't start everything again.
+  const mark = $("#mark");
+  function showMark(r, guess) {
+    if (!r || !r.found) { mark.hidden = true; return; }
+    const s = r.box.size * 1.25;
+    Object.assign(mark.style, { left: (r.box.cx - s / 2) * 100 + "%", top: (r.box.cy - s / 2) * 100 + "%", width: s * 100 + "%", height: s * 100 + "%" });
+    mark.hidden = false; mark.dataset.label = guess || "";
+  }
   function loop() {
     if (!stream) return;
+    const t0 = performance.now();
     if (video.readyState >= 2) {
-      const top = Recognizer.classify(video, cropBox(video.videoWidth, video.videoHeight, CROP))[0];
-      if (top.key !== "none" && C[top.key] && top.p >= SURE) {
-        streak = top.key === streak.key ? { key: top.key, n: streak.n + 1 } : { key: top.key, n: 1 };
-        $("#hint").textContent = "Hold still";
-        if (streak.n >= STEADY) {
+      const r = Recognizer.scan(video);
+      if (r.found) {
+        lastSeen = t0; frames++;
+        const p = Object.fromEntries(r.ranked.map(x => [x.key, x.p]));
+        avg = avg ? Object.fromEntries(Object.keys(p).map(k => [k, avg[k] * MEMORY + p[k] * (1 - MEMORY)])) : p;
+        const top = Object.entries(avg).sort((a, b) => b[1] - a[1])[0];
+        // logic check: only answer if the chocolate, its shell colour and its digit count all agree
+        const agrees = k => r.shell === META.shellOf[k] && r.mark === META.markOf[k];
+        const instant = r.ranked[0].p >= INSTANT && agrees(r.ranked[0].key);
+        const settled = frames >= 3 && top[1] >= SETTLED && agrees(top[0]);
+        showMark(r, top[1] > 0.4 ? label(top[0]).split(" ")[0] : "");
+        $("#hint").textContent = top[1] > 0.4 ? "Reading…" : "Got it, reading the number…";
+        if (instant || settled) {
+          const key = instant ? r.ranked[0].key : top[0];
           viewer.classList.add("locked");
-          const key = streak.key;
-          setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 300);
+          setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 250);
           return;
         }
       } else {
-        streak = { key: null, n: 0 };
-        $("#hint").textContent = "Fill the circle with the top of one chocolate";
+        showMark(null);
+        if (t0 - lastSeen > 1200) { avg = null; frames = 0; }   // forget only after a second with no chocolate in view
+        $("#hint").textContent = "Point the camera at one chocolate";
       }
     }
-    timer = setTimeout(loop, 200);
+    timer = setTimeout(loop, Math.max(0, 60 - (performance.now() - t0)));
   }
 
   // ---------- Single photo (works without live camera access) ----------
@@ -152,15 +168,12 @@
     setStatus(`<img class="thumb" src="${url}" alt=""><span class="dot"></span><span>Reading your chocolate…</span>`);
     const img = new Image();
     img.onload = () => setTimeout(() => {
-      // The chocolate may not be centred, so slide a square window across the photo at two sizes
-      const W = img.naturalWidth, H = img.naturalHeight, side = Math.min(W, H);
-      const boxes = [];
-      for (const share of [0.38, 0.55]) {
-        const size = Math.round(side * share), step = size / 2;
-        for (let y = 0; y + size <= H + 1; y += step) for (let x = 0; x + size <= W + 1; x += step)
-          boxes.push({ x: Math.round(Math.min(x, W - size)), y: Math.round(Math.min(y, H - size)), size });
+      const res = Recognizer.scanPhoto(img);
+      const best = res ? res.ranked.filter(b => C[b.key]) : [];
+      if (!best.length) {
+        setStatus(`<img class="thumb" src="${url}" alt=""><span>We couldn't find a chocolate in this photo. Try again from above, a little closer.</span>`, "err");
+        return;
       }
-      const best = Recognizer.classifyBest(img, boxes).filter(b => C[b.key]);
       if (best[0].p >= PHOTO_SURE) {
         render(best[0].key, { scanned: true });
         setStatus(`<img class="thumb" src="${url}" alt=""><span>Found: ${esc(label(best[0].key))}</span>`);

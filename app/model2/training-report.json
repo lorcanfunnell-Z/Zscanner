@@ -1,0 +1,60 @@
+{
+  "trainedAt": "2026-10-20T15:59:10.334Z",
+  "test": "held-back last quarter of each recording",
+  "readerAlone": "85.0%",
+  "readerWithShellAndMarkLogic": "84.4%",
+  "fullPipeline_findThenRead": "82.0%",
+  "finderFoundChocolate": "100.0%",
+  "finderAvgCentreError": "0.035",
+  "noChocolateCorrectlyIgnored": "100.0%",
+  "mistakes": [
+    [
+      "6→3",
+      7
+    ],
+    [
+      "5→3",
+      6
+    ],
+    [
+      "8→6",
+      5
+    ],
+    [
+      "2→9",
+      4
+    ],
+    [
+      "21→19",
+      4
+    ],
+    [
+      "10→zdark",
+      3
+    ],
+    [
+      "14→11",
+      3
+    ],
+    [
+      "15→3",
+      3
+    ],
+    [
+      "23→19",
+      3
+    ],
+    [
+      "16→2",
+      2
+    ],
+    [
+      "18→23",
+      2
+    ],
+    [
+      "21→15",
+      2
+    ]
+  ]
+}

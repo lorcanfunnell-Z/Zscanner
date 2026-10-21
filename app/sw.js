@@ -1,11 +1,10 @@
 // Offline support: keeps the page, chocolate data and models on the phone after the first visit.
 // Bump VERSION whenever any file changes so phones pick up the new version.
-const VERSION = "scanner-v7";
+const VERSION = "scanner-v8";
 const FILES = [
   "./", "index.html", "styles.css", "app.js", "recognizer.js", "install.js", "collect.js", "vendor/jszip.min.js", "manifest.webmanifest",
-  "data/chocolates.js", "model/labels.json", "model/head/model.json", "model/head/weights.bin", "model/head-tight/model.json", "model/head-tight/weights.bin",
-  "vendor/tf.min.js", "vendor/mobilenet/model.json",
-  "vendor/mobilenet/group1-shard1of3.bin", "vendor/mobilenet/group1-shard2of3.bin", "vendor/mobilenet/group1-shard3of3.bin",
+  "data/chocolates.js", "model2/meta.json", "model2/finder/model.json", "model2/finder/weights.bin", "model2/reader/model.json", "model2/reader/weights.bin",
+  "vendor/tf.min.js", 
   "icons/icon-192.png", "icons/apple-touch-icon.png",
   ...["zdark", "zmilk", "zwhite", ...Array.from({ length: 25 }, (_, i) => String(i))].map(k => `images/${k}.jpg`)
 ];

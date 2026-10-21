@@ -1,59 +1,67 @@
-// On-device chocolate recogniser.
-// MobileNet (vendor/mobilenet) turns a 224×224 picture into a fingerprint;
-// the trained head (model/head) turns the fingerprint into a score per chocolate.
-// Everything runs in the browser: no photo ever leaves the phone.
+// zScanner recogniser v2, all on the phone.
+// 1. FINDER looks at the whole camera square and says whether there is a chocolate and where it is.
+// 2. READER looks closely at that spot and gives three opinions: which chocolate, which shell colour
+//    (dark / milk / white / milk-and-white) and which kind of mark (one digit / two digits / z).
+// 3. LOGIC: the three opinions are multiplied together, so a chocolate is only likely if its number,
+//    its shell and its mark all agree. A dark two-digit chocolate can only be 10, 13, 15, 17, 18, 19, 21 or 23.
 window.Recognizer = (() => {
-  let base = null, head = null, headTight = null, labels = null, loading = null;
-  // Two classifiers: one sees the whole framing square, one is zoomed in on the middle (the pressed number).
-  // Their scores are averaged, which tested more accurate than either alone.
-  const TIGHT = 0.425 / 0.70; // zoomed view as a share of the framing square
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 224;
+  let finder = null, reader = null, meta = null, loading = null;
+  const S = 224;
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = S;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
   function load() {
     if (!loading) loading = (async () => {
       await tf.ready();
-      const [b, h, ht, l] = await Promise.all([
-        tf.loadGraphModel("vendor/mobilenet/model.json"),
-        tf.loadLayersModel("model/head/model.json"),
-        tf.loadLayersModel("model/head-tight/model.json"),
-        fetch("model/labels.json").then(r => r.json())
+      [finder, reader, meta] = await Promise.all([
+        tf.loadLayersModel("model2/finder/model.json"),
+        tf.loadLayersModel("model2/reader/model.json"),
+        fetch("model2/meta.json").then(r => r.json())
       ]);
-      base = b; head = h; headTight = ht; labels = l.labels;
-      tf.tidy(() => head.predict(base.predict(tf.zeros([1, 224, 224, 3])))); // warm up
+      tf.tidy(() => { finder.predict(tf.zeros([1, S, S, 3])); reader.predict(tf.zeros([1, S, S, 3])); }); // warm up
     })();
     return loading;
   }
 
-  const inner = b => { const s = b.size * TIGHT; return { x: b.x + (b.size - s) / 2, y: b.y + (b.size - s) / 2, size: s }; };
-  // Scores each box with both classifiers and returns one averaged probability row per box
-  function score(source, boxes) {
-    const grab = b => { ctx.drawImage(source, b.x, b.y, b.size, b.size, 0, 0, 224, 224); return tf.browser.fromPixels(canvas); };
-    const wide = boxes.map(grab), tight = boxes.map(b => grab(inner(b)));
-    const out = tf.tidy(() => {
-      const emb = list => { const f = base.predict(tf.stack(list).toFloat().div(255)); return f.div(f.norm("euclidean", 1, true)); };
-      return head.predict(emb(wide)).add(headTight.predict(emb(tight))).div(2);
-    });
-    [...wide, ...tight].forEach(t => t.dispose());
-    const rows = out.arraySync(); out.dispose();
-    return rows;
+  // draw a square region of the source (may extend past the edges) onto the 224×224 canvas
+  function grab(source, x, y, size) {
+    ctx.fillStyle = "#808080"; ctx.fillRect(0, 0, S, S);
+    ctx.drawImage(source, x, y, size, size, 0, 0, S, S);
+    return tf.browser.fromPixels(canvas).toFloat().div(127.5).sub(1);
   }
-  const rank = row => row.map((p, i) => ({ key: labels[i], p })).sort((a, b) => b.p - a.p);
+  const srcSize = s => ({ w: s.videoWidth || s.naturalWidth || s.width, h: s.videoHeight || s.naturalHeight || s.height });
 
-  // source: <video>, <img> or <canvas>; box: {x, y, size} in source pixels
-  function classify(source, box) { return rank(score(source, [box])[0]); }
-
-  // Several windows of one picture in a single batch (much faster than one at a time).
-  // Returns the ranked scores of the window the model is most confident about.
-  function classifyBest(source, boxes) {
-    const all = [];
-    for (let i = 0; i < boxes.length; i += 8) all.push(...score(source, boxes.slice(i, i + 8))); // batches of 8 keep phone memory low
-    const real = row => Math.max(...row.filter((_, i) => labels[i] !== "none"));
-    let bestRow = all[0];
-    for (const row of all) if (real(row) > real(bestRow)) bestRow = row;
-    return rank(bestRow);
+  // the logic step: chocolate score × shell score × mark score, renormalised
+  function combine(pid, psh, pmk) {
+    const r = meta.ids.map((k, i) => pid[i] * psh[meta.shells.indexOf(meta.shellOf[k])] * pmk[meta.marks.indexOf(meta.markOf[k])]);
+    const sum = r.reduce((a, b) => a + b, 0) || 1;
+    return meta.ids.map((k, i) => ({ key: k, p: r[i] / sum })).sort((a, b) => b.p - a.p);
   }
 
-  return { load, classify, classifyBest, get ready() { return !!head; }, get backend() { return tf.getBackend(); } };
+  // Look at one square of the source. Returns { found, obj, box: {cx, cy, size} (0..1 of the square), ranked }
+  function scan(source, sq) {
+    const { w, h } = srcSize(source);
+    sq = sq || { x: (w - Math.min(w, h)) / 2, y: (h - Math.min(w, h)) / 2, size: Math.min(w, h) };
+    const fin = tf.tidy(() => finder.predict(grab(source, sq.x, sq.y, sq.size).expandDims(0)));
+    const obj = fin[0].dataSync()[0], [cx, cy, bs] = fin[1].dataSync(); tf.dispose(fin);
+    const box = { cx, cy, size: Math.max(0.08, bs) };
+    if (obj < 0.5) return { found: false, obj, box };
+    const side = box.size * meta.readerPad * sq.size;
+    const rd = tf.tidy(() => reader.predict(grab(source, sq.x + cx * sq.size - side / 2, sq.y + cy * sq.size - side / 2, side).expandDims(0)));
+    const [pid, psh, pmk] = rd.map(t => Array.from(t.dataSync())); tf.dispose(rd);
+    return { found: true, obj, box, ranked: combine(pid, psh, pmk), shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+  }
+
+  // For still photos: try a few squares along the long side and keep the most confident result
+  function scanPhoto(img) {
+    const { w, h } = srcSize(img), side = Math.min(w, h), long = Math.max(w, h), out = [];
+    for (const f of [0.5, 0.25, 0.75]) {
+      const off = Math.max(0, Math.min(long - side, f * long - side / 2));
+      const r = scan(img, w >= h ? { x: off, y: 0, size: side } : { x: 0, y: off, size: side });
+      if (r.found) out.push(r);
+    }
+    return out.sort((a, b) => b.ranked[0].p - a.ranked[0].p)[0] || null;
+  }
+
+  return { load, scan, scanPhoto, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
 })();
