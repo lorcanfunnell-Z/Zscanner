@@ -114,7 +114,8 @@ def photo(k, W=448):
     # slight keystone
     w, h = choc.size; kt, kb = max(0, u(-.08, .08)) * w, max(0, u(-.08, .08)) * w   # one edge nearer the camera
     choc = choc.transform((w, h), Image.QUAD, (kt, 0, kb, h, w - kb, h, w - kt, 0), Image.BICUBIC)
-    choc = choc.rotate(u(-180, 180), Image.BICUBIC, expand=True)
+    ang = u(-180, 180)                                         # counter-clockwise; recorded so the aligner can learn 'which way up'
+    choc = choc.rotate(ang, Image.BICUBIC, expand=True)
     target = W * u(.42, .62)                                   # chocolate size in the photo
     bb = choc.getbbox(); choc = choc.crop(bb)
     f = target / max(choc.size); choc = choc.resize((max(8, int(choc.size[0] * f)), max(8, int(choc.size[1] * f))), Image.LANCZOS)
@@ -144,18 +145,19 @@ def photo(k, W=448):
     elif r < .5: img = img.filter(ImageFilter.UnsharpMask(u(1, 3), int(u(50, 180)), 2))     # phone over-sharpening
     buf = io.BytesIO(); img.save(buf, "JPEG", quality=int(u(45, 92))); img = Image.open(io.BytesIO(buf.getvalue()))
     box = [(px) / W, (py) / W, (px + cw) / W, (py + ch) / W]
-    return img, [round(v, 4) for v in box]
+    return img, [round(v, 4) for v in box], round(ang, 2)
 
 if __name__ == "__main__":
-    boxes = {}
+    boxes = {}; angles = {}
     for k in IDS:
         os.makedirs(os.path.join(OUT, k), exist_ok=True)
         for i in range(PER):
-            img, box = photo(k)
+            img, box, ang = photo(k)
             name = f"syn{SEED}_{i:04d}.jpg"; img.save(os.path.join(OUT, k, name), quality=95)
-            boxes[f"{k}/{name}"] = box
+            boxes[f"{k}/{name}"] = box; angles[f"{k}/{name}"] = ang
         print(k, end=" ", flush=True)
     bp = os.path.join(OUT, "boxes.json")
     old = json.load(open(bp)) if os.path.exists(bp) else {}
     old.update(boxes); json.dump(old, open(bp, "w"))
+    json.dump(angles, open(os.path.join(OUT, f"angles_{SEED}.json"), "w"))
     print(f"\n{len(boxes)} synthetic photos written")

@@ -114,7 +114,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null;
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = [];
     loop();
   }
 
@@ -131,6 +131,7 @@
   const DEBUG = window.ZADMIN === true;   // live numbers + test log only on the admin page
   let held = [], holdStart = 0;            // frames collected during the current hold
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
+  let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
   function frameShot() {   // what the camera saw (centre square), small, for the test log
     const c = document.createElement("canvas"); c.width = c.height = 320;
@@ -140,7 +141,8 @@
   }
   function report(type, guess) {
     if (!DEBUG || !lastInfo) return;
-    window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart), crop: Recognizer.snapshot(), frame: frameShot() } }));
+    window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart),
+      seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null, trace, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
@@ -175,6 +177,11 @@
           if (Math.hypot(r.box.cx - mx, r.box.cy - my) > MOVE_LIMIT) resetHold(t0);
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, sharp: r.sharp, p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark });
+        if (DEBUG) {
+          if (!firstSeen) firstSeen = t0;
+          if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
+            sharp: Math.round(r.sharp), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
+        }
         held = held.filter((f, i) => t0 - f.t <= HOLD_MS * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
         const progress = (t0 - holdStart) / HOLD_MS;
         showMark(r, progress);

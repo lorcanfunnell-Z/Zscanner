@@ -68,7 +68,8 @@
   window.addEventListener("zscan", async e => {
     const d = e.detail;
     const entry = { n: ++n, at: new Date().toISOString(), note: getNote(), type: d.type, guess: d.guess, avgTop3: d.avgTop3, nowTop3: d.nowTop3,
-      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, crop: d.crop, frame: d.frame, truth: null, correct: null };
+      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, trace: d.trace || [],
+      crop: d.crop, frame: d.frame, truth: null, correct: null };
     await put(entry);
     show(entry);
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -77,13 +78,14 @@
   function numbers(e) {
     const t = a => (a || []).map(x => `${name(x.key)} ${x.p}%`).join(" · ");
     return `<table>
-      <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : "No answer (you closed the camera)"}</td></tr>
+      <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : e.type === "retry" ? "No answer within 5 s (client is asked to try again)" : "No answer (you closed the camera)"}</td></tr>
       <tr><td>Average over the hold</td><td>${t(e.avgTop3)}</td></tr>
       <tr><td>Last frame alone</td><td>${t(e.nowTop3)}</td></tr>
       <tr><td>Shell colour seen</td><td>${e.shell}</td></tr>
       <tr><td>Mark seen</td><td>${{ one: "one digit", two: "two digits", z: "z" }[e.mark] || e.mark}</td></tr>
       <tr><td>Frames averaged</td><td>${e.frames} over ${(e.holdMs / 1000).toFixed(1)}s</td></tr>
-      <tr><td>Time to answer</td><td>${(e.ms / 1000).toFixed(1)}s</td></tr></table>`;
+      <tr><td>Time to answer</td><td>${(e.ms / 1000).toFixed(1)}s${e.seenMs != null ? ` (${(e.seenMs / 1000).toFixed(1)}s after the chocolate was first seen)` : ""}</td></tr>
+      <tr><td>Frames recorded</td><td>${(e.trace || []).length}</td></tr></table>`;
   }
 
   function show(e) {
