@@ -41,7 +41,7 @@
       : `<span class="n"><span class="no">N°</span>${esc(key)}</span>${esc(c.name)}`;
     const zpick = c.z ? `
       <div class="zpick">
-        <p>${opts.scanned ? "Please confirm the colour of the shell." : "Which colour is the shell of your Z chocolate?"}</p>
+        <p>${opts.scanned ? "Wrong colour? Choose the shell of yours:" : "Which colour is the shell of your Z chocolate?"}</p>
         <div class="zrow">${["dark", "milk", "white"].map(t => `<button class="zbtn" type="button" data-z="${t}" aria-pressed="${"z" + t === key}"><span class="sw" style="background:${COUV[t].sw}"></span>${t}</button>`).join("")}</div>
       </div>` : "";
     const meta = [COUV[c.cv].label, ...c.tags].map(esc).join(" · ");
@@ -111,7 +111,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    avg = null; frames = 0; lastSeen = 0;
+    avg = null; frames = 0; lastSeen = 0; leader = null;
     loop();
   }
 
@@ -130,6 +130,19 @@
     Object.assign(mark.style, { left: (r.box.cx - s / 2) * 100 + "%", top: (r.box.cy - s / 2) * 100 + "%", width: s * 100 + "%", height: s * 100 + "%" });
     mark.hidden = false; mark.dataset.label = guess || "";
   }
+  // Answering rules (any one is enough):
+  //  • instant: one clear frame, 90%+ sure, and its shell colour and digit count agree
+  //  • settled: the running average is 80%+ sure and agrees
+  //  • steady: the same chocolate has stayed on top for STEADY_MS (half a second), at least 40% on average,
+  //    and the shell colour (99% reliable) agrees
+  const STEADY_MS = 500;
+  const DEBUG = /[?&]debug\b/.test(location.search);
+  let leader = null, leaderSince = 0;
+  function answer(key) {
+    viewer.classList.add("locked");
+    setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 200);
+  }
+
   function loop() {
     if (!stream) return;
     const t0 = performance.now();
@@ -139,22 +152,22 @@
         lastSeen = t0; frames++;
         const p = Object.fromEntries(r.ranked.map(x => [x.key, x.p]));
         avg = avg ? Object.fromEntries(Object.keys(p).map(k => [k, avg[k] * MEMORY + p[k] * (1 - MEMORY)])) : p;
-        const top = Object.entries(avg).sort((a, b) => b[1] - a[1])[0];
-        // logic check: only answer if the chocolate, its shell colour and its digit count all agree
+        const [topKey, topP] = Object.entries(avg).sort((a, b) => b[1] - a[1])[0];
+        if (topKey !== leader) { leader = topKey; leaderSince = t0; }
+        const held = t0 - leaderSince;
         const agrees = k => r.shell === META.shellOf[k] && r.mark === META.markOf[k];
+        const shellOk = k => r.shell === META.shellOf[k];
         const instant = r.ranked[0].p >= INSTANT && agrees(r.ranked[0].key);
-        const settled = frames >= 3 && top[1] >= SETTLED && agrees(top[0]);
-        showMark(r, top[1] > 0.4 ? label(top[0]).split(" ")[0] : "");
-        $("#hint").textContent = top[1] > 0.4 ? "Reading…" : "Got it, reading the number…";
-        if (instant || settled) {
-          const key = instant ? r.ranked[0].key : top[0];
-          viewer.classList.add("locked");
-          setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 250);
-          return;
-        }
+        const settled = frames >= 3 && topP >= SETTLED && agrees(topKey);
+        const steady = held >= STEADY_MS && topP >= 0.40 && shellOk(topKey);
+        const guess = topP > 0.3 ? label(topKey).split(" ")[0] : "";
+        showMark(r, guess);
+        $("#hint").textContent = guess ? "Reading…" : "Got it, reading the number…";
+        if (DEBUG) $("#hint").textContent = `${r.ranked.slice(0, 3).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${r.shell} ${r.mark} | ${Math.round(held)}ms`;
+        if (instant || settled || steady) { answer(instant ? r.ranked[0].key : topKey); return; }
       } else {
         showMark(null);
-        if (t0 - lastSeen > 1200) { avg = null; frames = 0; }   // forget only after a second with no chocolate in view
+        if (t0 - lastSeen > 1200) { avg = null; frames = 0; leader = null; }   // forget only after a second with no chocolate
         $("#hint").textContent = "Point the camera at one chocolate";
       }
     }
