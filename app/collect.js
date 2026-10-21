@@ -1,8 +1,8 @@
-// Hidden "collect" mode for building training photos: add ?collect to the scanner address.
+// Collect mode for building training photos (admin page only): opened from the admin bar.
 // Pick a chocolate → guided 9-second recording → review → Save or Retake → next chocolate.
 // Photos stay on the phone (IndexedDB) until you download them as one zip for retraining.
 (() => {
-  if (!/[?&]collect\b/.test(location.search)) return;
+  if (window.ZADMIN !== true) return;
 
   const C = window.CHOCOLATES;
   const KEYS = [...Array.from({ length: 25 }, (_, i) => String(i)), "zdark", "zmilk", "zwhite", "none"];
@@ -73,7 +73,7 @@
   .cl-err{color:#f0b9a8;font-size:13px}
   .cl-link{background:none;border:0;color:rgba(255,255,255,.6);text-decoration:underline;font:inherit;font-size:13px;cursor:pointer;padding:6px 0}
   </style>`);
-  const root = document.createElement("div"); root.className = "cl"; document.body.append(root);
+  const root = document.createElement("div"); root.className = "cl"; root.hidden = true; document.body.append(root);
   const video = Object.assign(document.createElement("video"), { muted: true, autoplay: true, playsInline: true });
   video.setAttribute("playsinline", ""); video.setAttribute("muted", "");
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = SIZE;
@@ -91,6 +91,7 @@
     await refreshCounts();
     const nk = nextKey(), total = Object.values(counts).reduce((a, b) => a + b, 0);
     root.innerHTML = `<div class="cl-screen">
+      <button class="cl-link" id="clExit" type="button" style="align-self:flex-start">← Back to admin</button>
       <p class="eyebrow">zScanner · training photos</p>
       <h3>Which chocolate are you recording?</h3>
       <div class="cl-bar"><i style="width:${doneN() / KEYS.length * 100}%"></i></div>
@@ -101,6 +102,7 @@
       <button class="cl-link" id="clClear" type="button">Delete all collected photos</button>
     </div>`;
     root.querySelectorAll(".cl-tile").forEach(b => b.onclick = () => showRecord(b.dataset.k));
+    root.querySelector("#clExit").onclick = closeCollect;
     root.querySelector("#clZip").onclick = downloadZip;
     let armed = false;
     root.querySelector("#clClear").onclick = async e => {
@@ -219,5 +221,9 @@
     btn.disabled = false; btn.textContent = `Download all photos (.zip) · ${shots.length}`;
   }
 
-  showPicker();
+  function closeCollect() {
+    stream?.getTracks().forEach(t => t.stop()); stream = null;
+    root.hidden = true; document.body.style.overflow = "";
+  }
+  window.ZCollect = { open: () => { root.hidden = false; document.body.style.overflow = "hidden"; showPicker(); }, close: closeCollect };
 })();

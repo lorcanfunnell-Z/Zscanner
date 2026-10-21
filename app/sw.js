@@ -1,8 +1,8 @@
 // Offline support: keeps the page, chocolate data and models on the phone after the first visit.
 // Bump VERSION whenever any file changes so phones pick up the new version.
-const VERSION = "scanner-v11";
+const VERSION = "scanner-v12";
 const FILES = [
-  "./", "index.html", "styles.css", "app.js", "recognizer.js", "install.js", "collect.js", "debuglog.js", "vendor/jszip.min.js", "manifest.webmanifest",
+  "./", "index.html", "styles.css", "app.js", "recognizer.js", "install.js", "collect.js", "debuglog.js", "admin.html", "admin.js", "vendor/jszip.min.js", "manifest.webmanifest",
   "data/chocolates.js", "model2/meta.json", "model2/finder/model.json", "model2/finder/weights.bin", "model2/reader/model.json", "model2/reader/weights.bin",
   "vendor/tf.min.js", 
   "icons/icon-192.png", "icons/apple-touch-icon.png",

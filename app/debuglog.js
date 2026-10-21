@@ -1,8 +1,8 @@
-// Debug test log (only with ?debug in the address). After every scan it shows the numbers behind the decision,
+// Test log (admin page only). After every scan it shows the numbers behind the decision,
 // asks Right / Wrong (and the real chocolate if wrong), and saves it with a place/lighting note and the two
 // pictures the scanner used. Everything stays on the phone until "Download test log" makes one zip.
 (() => {
-  if (!/[?&]debug\b/.test(location.search)) return;
+  if (window.ZADMIN !== true) return;
   const C = window.CHOCOLATES;
   const KEYS = [...Array.from({ length: 25 }, (_, i) => String(i)), "zdark", "zmilk", "zwhite"];
   const name = k => !k ? "nothing" : k.startsWith("z") ? C[k].name : "N°" + k;

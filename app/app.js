@@ -125,7 +125,7 @@
   // as a countdown; moving away restarts it. Then every frame from that second is averaged, and the answer is
   // given only if the winner's shell colour matches what most frames saw (the logic check).
   const mark = $("#mark");
-  const DEBUG = /[?&]debug\b/.test(location.search);
+  const DEBUG = window.ZADMIN === true;   // live numbers + test log only on the admin page
   let held = [], holdStart = 0;            // frames collected during the current hold
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
