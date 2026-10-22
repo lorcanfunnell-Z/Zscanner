@@ -15,22 +15,31 @@ window.Recognizer = (() => {
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = S;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-  function load() {
+  // Loading: every model downloads at the same time; listeners hear progress 0..1 (90% = downloaded, 100% = ready).
+  const progressFns = []; let progress = 0;
+  const report = p => { progress = Math.max(progress, p); progressFns.forEach(f => { try { f(progress); } catch (e) {} }); };
+  function load(onProgress) {
+    if (onProgress) { progressFns.push(onProgress); onProgress(progress); }
     if (!loading) loading = (async () => {
       loadStart = performance.now();
       await tf.ready();
       meta = await fetch(DIR + "/meta.json").then(r => r.json());
       const B = meta.base || DIR;                               // a candidate can reuse the proven finder and reader
-      [finder, reader] = await Promise.all([tf.loadLayersModel(B + "/finder/model.json"), tf.loadLayersModel(B + "/reader/model.json")]);
-      if (meta.align || meta.print) quarter = await tf.loadLayersModel(DIR + "/quarter/model.json");
-      if (meta.print) {   // Stage 3: chocoprint model + reference gallery
-        [printer, gallery] = await Promise.all([tf.loadLayersModel(DIR + "/print/model.json"), fetch(DIR + "/gallery.json").then(r => r.json())]);
+      const parts = [B + "/finder", B + "/reader", ...(meta.align || meta.print ? [DIR + "/quarter"] : []), ...(meta.print ? [DIR + "/print"] : [])];
+      const frac = parts.map(() => 0), tick = () => report(0.9 * frac.reduce((a, b) => a + b, 0) / parts.length);
+      const models = await Promise.all(parts.map((u, i) => tf.loadLayersModel(u + "/model.json", { onProgress: f => { frac[i] = f; tick(); } })));
+      [finder, reader] = models; quarter = meta.align || meta.print ? models[2] : null; printer = meta.print ? models[3] : null;
+      if (meta.print) {   // Stage 3: reference gallery
+        gallery = await fetch(DIR + "/gallery.json").then(r => r.json());
         gallery.byMark = {}; gallery.entries.forEach(([m, v]) => (gallery.byMark[m] = gallery.byMark[m] || []).push(v));
         // chocolates added from the admin page (custom-chocolates.json): their prints join the gallery under their own key
         try { const cu = await fetch("custom-chocolates.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null);
           if (cu) { gallery.custom = Object.keys(cu.chocolates || {}); (cu.prints || []).forEach(([k, v]) => (gallery.byMark[k] = gallery.byMark[k] || []).push(v)); } } catch (e) {}
       }
-      tf.tidy(() => { for (const m of [finder, reader, quarter, printer]) if (m) m.predict(tf.zeros([1, S, S, 3])); }); // warm up
+      report(0.92);
+      // warm up: the first run prepares the phone's graphics chip; reading the result waits until that is really done
+      for (const m of [finder, reader, quarter, printer]) if (m) { const out = m.predict(tf.zeros([1, S, S, 3])); await (Array.isArray(out) ? out[0] : out).data(); tf.dispose(out); }
+      report(1);
       loadMs = performance.now() - loadStart;
     })();
     return loading;
@@ -50,8 +59,13 @@ window.Recognizer = (() => {
     return tf.browser.fromPixels(canvas).toFloat().div(127.5).sub(1);
   }
   // Square-edge angle (same maths as training/align_lib.js): degrees to turn the picture counter-clockwise to square it up
+  // Speed: worked out on a half-size copy (112 px): same accuracy (98-99% within 10°; 0.3° from full size on real close-ups), a quarter of the work
+  const E = 112, ecan = document.createElement("canvas"); ecan.width = ecan.height = E;
+  const ectx = ecan.getContext("2d", { willReadFrequently: true });
   function edgeAngle() {
-    const d = ctx.getImageData(0, 0, S, S).data, g = new Float32Array(S * S);
+    ectx.drawImage(canvas, 0, 0, S, S, 0, 0, E, E);
+    { const S = E;   // the loops below run on the small copy
+    const d = ectx.getImageData(0, 0, S, S).data, g = new Float32Array(S * S);
     for (let i = 0; i < S * S; i++) g[i] = 0.299 * d[4 * i] + 0.587 * d[4 * i + 1] + 0.114 * d[4 * i + 2];
     const b = new Float32Array(S * S), c = new Float32Array(S * S);
     for (const [src, dst] of [[g, b], [b, c]]) for (let y = 1; y < S - 1; y++) for (let x = 1; x < S - 1; x++) {
@@ -67,7 +81,7 @@ window.Recognizer = (() => {
       re += w * Math.cos(4 * phi); im += w * Math.sin(4 * phi);
     }
     return (Math.atan2(im, re) * 180 / Math.PI) / 4;
-  }
+  } }
   const readAt = (source, x, y, side, rot) => {
     const crop = grab(source, x, y, side, rot);
     const rd = tf.tidy(() => reader.predict(crop.expandDims(0))); crop.dispose();
@@ -110,7 +124,8 @@ window.Recognizer = (() => {
     sq = sq || { x: (w - Math.min(w, h)) / 2, y: (h - Math.min(w, h)) / 2, size: Math.min(w, h) };
     const now = performance.now(), recent = opts.track && prev && now - prev.t < Math.max(250, 3 * prev.dur);
     let obj, cx, cy, bs;
-    if (recent && nFrame % 2 === 0) ({ obj, cx, cy, bs } = prev.fin);   // reuse the box on alternate frames while holding
+    const reuse = recent && nFrame % 2 === 0;
+    if (reuse) ({ obj, cx, cy, bs } = prev.fin);   // reuse the box on alternate frames while holding
     else {
       const fin = tf.tidy(() => finder.predict(grab(source, sq.x, sq.y, sq.size).expandDims(0)));
       obj = fin[0].dataSync()[0]; [cx, cy, bs] = fin[1].dataSync(); tf.dispose(fin);
@@ -126,7 +141,7 @@ window.Recognizer = (() => {
     if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
     else if (!meta.align) {                                    // reader reads as it is; straightening is only for the chocoprint
       [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
-      const e = edgeAngle(); lap("straighten (edges)");
+      const e = reuse && prev.e != null ? prev.e : edgeAngle(); lap("straighten (edges)");   // same box as last frame → same angle
       const de = prev ? Math.abs(((e - prev.e) % 90 + 135) % 90 - 45) : 99;   // change in angle since last frame (mod 90)
       let q;
       if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8) { q = prev.q; qsure = prev.qsure; }   // same way up as a moment ago
@@ -194,5 +209,5 @@ window.Recognizer = (() => {
   // the last close-up the reader looked at (for the debug test log)
   const snapshot = () => canvas.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
+  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
 })();

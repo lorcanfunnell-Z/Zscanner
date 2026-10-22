@@ -92,7 +92,9 @@
   async function ensureModel() {
     if (Recognizer.ready) return true;
     setStatus(`<span class="dot"></span><span>Preparing the scanner…</span>`);
-    try { await Recognizer.load(); setStatus(""); return true; }
+    // admin (for now): show how far along it is, so the wait never looks frozen
+    const prog = window.ZADMIN ? p => { if (!Recognizer.ready) setStatus(`<span class="dot"></span><span>Preparing the scanner… ${Math.round(p * 100)}%</span>`); } : null;
+    try { await Recognizer.load(prog); setStatus(""); return true; }
     catch (e) { console.error(e); setStatus("The scanner could not start. Please choose your number below.", "err"); return false; }
   }
 

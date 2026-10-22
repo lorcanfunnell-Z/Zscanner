@@ -35,3 +35,6 @@
   document.getElementById("modeSpeed").onclick = () => window.ZSpeed && window.ZSpeed.open();
   document.getElementById("modeLock").onclick = () => { try { localStorage.removeItem(KEY); } catch {} location.reload(); };
 })();
+
+// Speed: the admin page also keeps the scanner's files on the phone after the first visit (no install button here)
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
