@@ -189,13 +189,18 @@ function toGray(b) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.len
   console.log("training prints:", MKS.map(m => `${m}:${pool[m].real.length}r/${pool[m].syn.length}s`).join(" "));
   const pick = m => { const p = pool[m]; const src = p.real.length && (rnd() < .55 || !p.syn.length) ? p.real : p.syn; return src[Math.floor(rnd() * src.length)]; };
   // P classes x K photos per batch; lookalike groups are put together half the time (hard pairs)
+  // Stage 4 (HARDPAIRS=1): lookalike pairs from the confusion map, plus pairs whose prints sit closest (re-mined every round)
+  const HARDP = process.env.HARDPAIRS === "1" ? JSON.parse(fs.readFileSync(path.join(ROOT, "training", "hard-pairs.json"))).map(([a, b, w]) => [mk(a), mk(b), w]) : [];
+  let mined = [];
+  const pickPair = () => { const all = HARDP.concat(mined), tot = all.reduce((s, h) => s + h[2], 0); let r = rnd() * tot; for (const h of all) { r -= h[2]; if (r <= 0) return h; } return all[0]; };
   function sampleBatch(P = 8, K = 4) {
     const cls = new Set();
+    if (HARDP.length) while (cls.size < P / 2 + 1) { const [a, b] = pickPair(); cls.add(a); cls.add(b); }
     while (cls.size < P) {
       if (rnd() < .5) { const g = GROUPS[Math.floor(rnd() * GROUPS.length)]; for (const c of shuffle(g.slice()).slice(0, 3)) if (cls.size < P) cls.add(c); }
       else cls.add(MKS[Math.floor(rnd() * MKS.length)]);
     }
-    const out = []; for (const c of cls) for (let k = 0; k < K; k++) out.push(pick(c)); return out;
+    const out = []; for (const c of [...cls].slice(0, P + 1)) for (let k = 0; k < K; k++) out.push(pick(c)); return out;
   }
   // ---- model ----
   const base = await backbone();
@@ -232,7 +237,7 @@ function toGray(b) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.len
   if (process.env.RESUME === "1" && fs.existsSync(path.join(CK, "state.json"))) {
     const st = JSON.parse(fs.readFileSync(path.join(CK, "state.json")));
     const saved = await tf.loadLayersModel("file://" + path.join(CK, "model.json"));
-    model.setWeights(saved.getWeights()); saved.dispose();
+    for (const l of model.layers) { try { const sl = saved.getLayer(l.name); if (sl.getWeights().length) l.setWeights(sl.getWeights()); } catch (e) {} } saved.dispose();
     W.assign(tf.tensor(st.W)); startEp = st.epoch; for (let i = 0; i < st.rndCalls; i++) rnd();
     console.log(`resuming from round ${startEp + 1}`);
   }
@@ -248,6 +253,14 @@ function toGray(b) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.len
       sum += cost.dataSync()[0]; tf.dispose([x, y, cost]);
     }
     console.log(`prints (${LOSS}) epoch ${ep + 1}/${EPOCHS_R}: loss ${(sum / STEPS).toFixed(3)} (${Math.round((Date.now() - t0) / 1000)}s)`);
+    if (HARDP.length) {   // hard-negative mining: which marks' average prints are closest right now?
+      const cent = {};
+      for (const m of MKS) { const l = pool[m].real.length ? pool[m].real : pool[m].syn; const sm = shuffle(l.slice()).slice(0, 6);
+        const x = toTensor(await Promise.all(sm.map(a => zoomView(a, false)))); const e = norm(model.predict(x)); cent[m] = norm(e.mean(0)).arraySync(); tf.dispose([x, e]); }
+      const sims = []; for (let i = 0; i < MKS.length; i++) for (let j = i + 1; j < MKS.length; j++) sims.push([MKS[i], MKS[j], cent[MKS[i]].reduce((s, v, k) => s + v * cent[MKS[j]][k], 0)]);
+      sims.sort((a, b) => b[2] - a[2]); mined = sims.slice(0, 12).map(([a, b, v]) => [a, b, 3 * Math.max(0.1, v)]);
+      console.log("  closest prints now:", sims.slice(0, 6).map(([a, b, v]) => `${a}/${b} ${v.toFixed(2)}`).join(", "));
+    }
     fs.mkdirSync(CK, { recursive: true }); await model.save("file://" + CK);
     fs.writeFileSync(path.join(CK, "state.json"), JSON.stringify({ epoch: ep + 1, W: W.arraySync(), rndCalls: 0 }));
   }

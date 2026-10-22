@@ -214,5 +214,6 @@ function toGray(b) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.len
   // agreement rule: answer only when model 4 and the chocoprints pick the same chocolate
   const agree = rows.map(r => ({ a: top(r.m4), b: top(r.pp), c: top(r.both), truth: r.truth })).filter(x => x.a.k === x.b.k || (mk(x.a.k) === "z" && mk(x.b.k) === "z"));
   console.log("agreement rule:", JSON.stringify({ answers: `${agree.length}/${rows.length}`, wrong: agree.filter(x => x.a.k !== x.truth).length, wrongList: agree.filter(x => x.a.k !== x.truth).map(x => x.truth + "→" + x.a.k).join(" ") }));
+  if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify({ ids: IDS, rows: rows.map(r => ({ truth: r.truth, m4: r.m4, pp: r.pp })) }));
   fs.writeFileSync(path.join(PR, "combo-report.json"), JSON.stringify({ ...out, rows: rows.map(r => ({ truth: r.truth, m4: top(r.m4), print: top(r.pp), both: top(r.both) })) }, null, 2));
 })().catch(e => { console.error(e); process.exit(1); });

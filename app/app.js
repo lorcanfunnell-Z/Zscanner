@@ -24,7 +24,7 @@
 
   const $ = s => document.querySelector(s);
   let META = { shellOf: {}, markOf: {} };
-  fetch((window.ZADMIN ? "model5" : "model4") + "/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
+  fetch((window.ZADMIN ? "model6" : "model4") + "/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function utm(url, content) {
@@ -211,8 +211,10 @@
         // rule "agree" (model 5): the classifier and the chocoprints, each voting over the held second, must name the same chocolate
         const vote = f => { const c = {}; held.forEach(h => { const k = f(h); if (k) c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
         const zm = k => k && k.startsWith("z") ? "z" : k;
-        const agreed = META.rule !== "agree" || (zm(vote(h => h.m4top)) === zm(topKey) && vote(h => h.pmark) === zm(topKey));
-        if (DEBUG && META.rule === "agree") $("#hint").textContent += ` | agree ${agreed ? "yes" : "no"} (${vote(h => h.m4top)} / ${vote(h => h.pmark)})`;
+        const bothAgree = zm(vote(h => h.m4top)) === zm(topKey) && vote(h => h.pmark) === zm(topKey);
+        // rule "agree-or-99" (model 6, Lorcan's choice D+): both agree, or the combined score is at least 99% sure
+        const agreed = !META.rule ? true : META.rule === "agree" ? bothAgree : bothAgree || topP >= (META.sure ?? 0.99);
+        if (DEBUG && META.rule) $("#hint").textContent += ` | agree ${agreed ? "yes" : "no"} (${vote(h => h.m4top)} / ${vote(h => h.pmark)})`;
         if (agreed && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)
             && (C[topKey]?.custom ? true : META.shellOf[topKey] === shellVote && META.markOf[topKey] === markVote)) { answer(topKey); return; }
       } else {
