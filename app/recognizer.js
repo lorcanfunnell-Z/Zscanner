@@ -9,8 +9,8 @@
 //    which side is the top. If it isn't sure, the reader tries the two likeliest ways up and keeps the clearer reading.
 // The admin page runs the newest candidate model; the client page keeps the proven one until a fair test says otherwise.
 window.Recognizer = (() => {
-  const DIR = "model4";   // admin tries a candidate model here once it beats model 4 on the fair check
-  let finder = null, reader = null, quarter = null, meta = null, loading = null;
+  const DIR = window.ZADMIN ? "model5" : "model4";   // admin tries the candidate; clients keep the proven model
+  let finder = null, reader = null, quarter = null, printer = null, gallery = null, meta = null, loading = null;
   const S = 224;
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = S;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -18,13 +18,18 @@ window.Recognizer = (() => {
   function load() {
     if (!loading) loading = (async () => {
       await tf.ready();
-      [finder, reader, meta] = await Promise.all([
-        tf.loadLayersModel(DIR + "/finder/model.json"),
-        tf.loadLayersModel(DIR + "/reader/model.json"),
-        fetch(DIR + "/meta.json").then(r => r.json())
-      ]);
-      if (meta.align) quarter = await tf.loadLayersModel(DIR + "/quarter/model.json");
-      tf.tidy(() => { finder.predict(tf.zeros([1, S, S, 3])); reader.predict(tf.zeros([1, S, S, 3])); if (quarter) quarter.predict(tf.zeros([1, S, S, 3])); }); // warm up
+      meta = await fetch(DIR + "/meta.json").then(r => r.json());
+      const B = meta.base || DIR;                               // a candidate can reuse the proven finder and reader
+      [finder, reader] = await Promise.all([tf.loadLayersModel(B + "/finder/model.json"), tf.loadLayersModel(B + "/reader/model.json")]);
+      if (meta.align || meta.print) quarter = await tf.loadLayersModel(DIR + "/quarter/model.json");
+      if (meta.print) {   // Stage 3: chocoprint model + reference gallery
+        [printer, gallery] = await Promise.all([tf.loadLayersModel(DIR + "/print/model.json"), fetch(DIR + "/gallery.json").then(r => r.json())]);
+        gallery.byMark = {}; gallery.entries.forEach(([m, v]) => (gallery.byMark[m] = gallery.byMark[m] || []).push(v));
+        // chocolates added from the admin page (custom-chocolates.json): their prints join the gallery under their own key
+        try { const cu = await fetch("custom-chocolates.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null);
+          if (cu) { gallery.custom = Object.keys(cu.chocolates || {}); (cu.prints || []).forEach(([k, v]) => (gallery.byMark[k] = gallery.byMark[k] || []).push(v)); } } catch (e) {}
+      }
+      tf.tidy(() => { for (const m of [finder, reader, quarter, printer]) if (m) m.predict(tf.zeros([1, S, S, 3])); }); // warm up
     })();
     return loading;
   }
@@ -95,7 +100,12 @@ window.Recognizer = (() => {
     const sharp = sharpness();
     let pid, psh, pmk, rot = 0, qsure = 1;
     if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
-    else {
+    else if (!meta.align) {                                    // reader reads as it is; straightening is only for the chocoprint
+      [pid, psh, pmk] = readAt(source, x, y, side, 0);
+      const e = edgeAngle(); const sqd = grab(source, x, y, side, -e);
+      const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
+      const q = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a])[0]; qsure = pq[q]; rot = -e + 90 * q;
+    } else {
       const e = edgeAngle();                                   // 1. square it up
       const sqd = grab(source, x, y, side, -e);
       const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
@@ -109,7 +119,32 @@ window.Recognizer = (() => {
       [pid, psh, pmk] = best.r; rot = best.rot;
       if (tries.length > 1) grab(source, x, y, side, rot).dispose();   // leave the chosen view on the canvas for the snapshot
     }
-    return { found: true, obj, box, sharp, rot, qsure, ranked: combine(pid, psh, pmk), shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+    let ranked = combine(pid, psh, pmk), print = null; const m4top = ranked[0].key;
+    if (printer) {
+      // Stage 3: chocoprint of the straightened, zoomed-in number, compared with the gallery (mean of the 3 closest per mark)
+      const z = side * gallery.zoom, zc = grab(source, x + side / 2 - z / 2, y + side / 2 - z / 2, z, rot);
+      const v = tf.tidy(() => {
+        // black-and-white (shape only) when the chocoprint model was trained that way
+        const inp = gallery.gray ? zc.mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(2, true).tile([1, 1, 3]) : zc;
+        const e = printer.predict(inp.expandDims(0)); return e.div(tf.norm(e, 2, -1, true).add(1e-9));
+      }).dataSync(); zc.dispose();
+      const sims = {};
+      for (const [m, refs] of Object.entries(gallery.byMark)) {
+        const ss = refs.map(r => { let d = 0; for (let k = 0; k < r.length; k++) d += r[k] * v[k]; return d; }).sort((a, b) => b - a);
+        sims[m] = (ss[0] + (ss[1] ?? ss[0]) + (ss[2] ?? ss[0])) / 3;
+      }
+      const mx = Math.max(...Object.values(sims)), ex = {}; let zsum = 0;
+      for (const [m, s2] of Object.entries(sims)) { ex[m] = Math.exp(20 * (s2 - mx)); zsum += ex[m]; }
+      const pm = k => ex[k.startsWith("z") ? "z" : k] / zsum;
+      const prod = ranked.map(r => ({ key: r.key, p: r.p * pm(r.key) })), t = prod.reduce((a, b) => a + b.p, 0) || 1;
+      const order = Object.entries(sims).sort((a, b) => b[1] - a[1]);
+      print = { mark: order[0][0], sim: order[0][1], gap: order[0][1] - order[1][1], vec: Array.from(v) };
+      ranked = prod.map(r => ({ key: r.key, p: r.p / t })).sort((a, b) => b.p - a.p);
+      // an added chocolate isn't known to the classifier, so it is recognised by its print alone, and only when clearly closest
+      if ((gallery.custom || []).includes(print.mark) && print.sim >= 0.6 && print.gap >= 0.08)
+        ranked = [{ key: print.mark, p: 0.9 }, ...ranked.map(r => ({ key: r.key, p: r.p * 0.1 }))];
+    }
+    return { found: true, obj, box, sharp, rot, qsure, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
   // For still photos: try a few squares along the long side and keep the most confident result
@@ -126,5 +161,5 @@ window.Recognizer = (() => {
   // the last close-up the reader looked at (for the debug test log)
   const snapshot = () => canvas.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get model() { return DIR; }, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
+  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get model() { return DIR; }, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
 })();

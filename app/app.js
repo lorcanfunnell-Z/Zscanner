@@ -4,7 +4,9 @@
   const SITE = "https://www.zchocolat.com";
   const SHOP = SITE + "/collections/28-chocolate-assortments";
   // Official studio photos from the zchocolat.com tasting guide; our own photo is the fallback
-  const photo = k => SITE + "/img/cms/flavors/" + (k.startsWith("z") ? "z-" + k.slice(1) : "n" + k.padStart(2, "0")) + ".jpg";
+  const photo = k => C[k]?.img || SITE + "/img/cms/flavors/" + (k.startsWith("z") ? "z-" + k.slice(1) : "n" + k.padStart(2, "0")) + ".jpg";
+  // chocolates added from the admin page
+  fetch("custom-chocolates.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(cu => { if (cu) for (const [k, v] of Object.entries(cu.chocolates || {})) C[k] = { ...v, custom: true }; }).catch(() => {});
   const COUV = {
     dark: { label: "70% dark couverture", sw: "var(--dark-c)" },
     milk: { label: "40% milk couverture", sw: "var(--milk-c)" },
@@ -17,11 +19,12 @@
   const MARGIN = 0.30;      // ...and this far ahead of the second guess
   const MIN_SHARP = 45;     // close-ups less sharp than this are skipped (the number can't be read)
   const MIN_SIZE = 0.13;    // chocolate smaller than this share of the view: ask to move closer
+  const IDK_AFTER_MS = 2000; // candidate model (admin): after the hold, this long without an answer → say what would help
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
   let META = { shellOf: {}, markOf: {} };
-  fetch("model4/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
+  fetch((window.ZADMIN ? "model5" : "model4") + "/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function utm(url, content) {
@@ -34,27 +37,28 @@
   }
   document.querySelectorAll("a[data-utm]").forEach(a => a.href = utm(a.href, a.dataset.utm));
   const setStatus = (html, cls = "") => { const s = $("#status"); s.className = "status " + cls; s.innerHTML = html; };
-  const label = k => C[k].z ? C[k].name : "N°" + k + " " + C[k].name;
+  const label = k => C[k].z || C[k].custom ? (C[k].custom && C[k].no ? "N°" + C[k].no + " " : "") + C[k].name : "N°" + k + " " + C[k].name;
 
   // ---------- Result card ----------
   function render(key, opts = {}) {
     const c = C[key]; if (!c) return;
-    const title = c.z
+    const title = c.z || (c.custom && !c.no)
       ? esc(c.name)
+      : c.custom ? `<span class="n"><span class="no">N°</span>${esc(c.no)}</span>${esc(c.name)}`
       : `<span class="n"><span class="no">N°</span>${esc(key)}</span>${esc(c.name)}`;
     const zpick = c.z ? `
       <div class="zpick">
         <p>${opts.scanned ? "Wrong colour? Choose the shell of yours:" : "Which colour is the shell of your Z chocolate?"}</p>
         <div class="zrow">${["dark", "milk", "white"].map(t => `<button class="zbtn" type="button" data-z="${t}" aria-pressed="${"z" + t === key}"><span class="sw" style="background:${COUV[t].sw}"></span>${t}</button>`).join("")}</div>
       </div>` : "";
-    const meta = [COUV[c.cv].label, ...c.tags].map(esc).join(" · ");
+    const meta = [COUV[c.cv]?.label || "", ...(c.tags || [])].filter(Boolean).map(esc).join(" · ");
     $("#result").innerHTML = `
       <article class="card">
         <div class="card-photo">
           <img src="${photo(key)}" alt="${esc(c.name)}" onerror="this.onerror=null;this.src='images/${esc(key)}.jpg'">
           ${opts.example ? '<span class="badge">Example</span>' : ""}
         </div>
-        <p class="eyebrow dark">${c.z ? "The signature Z chocolates" : "The numbered collection"}</p>
+        <p class="eyebrow dark">${c.z ? "The signature Z chocolates" : c.custom ? "zChocolat" : "The numbered collection"}</p>
         <h2>${title}</h2>
         ${zpick}
         <p class="desc">${esc(c.d)}</p>
@@ -176,11 +180,12 @@
           const mx = held.reduce((s, f) => s + f.cx, 0) / held.length, my = held.reduce((s, f) => s + f.cy, 0) / held.length;
           if (Math.hypot(r.box.cx - mx, r.box.cy - my) > MOVE_LIMIT) resetHold(t0);
         } else holdStart = t0;
-        held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, sharp: r.sharp, p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark });
+        held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
+          p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark });
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
-            sharp: Math.round(r.sharp), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
+            sharp: Math.round(r.sharp), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
         }
         held = held.filter((f, i) => t0 - f.t <= HOLD_MS * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
         const progress = (t0 - holdStart) / HOLD_MS;
@@ -196,10 +201,20 @@
         const mcount = v => held.filter(f => f.mark === v).length;
         lastInfo = { avgTop3: top3(avg), nowTop3: r.ranked.slice(0, 3).map(x => ({ key: x.key, p: Math.round(x.p * 1000) / 10 })), shell: shellVote,
           mark: ["one", "two", "z"].sort((a, b) => mcount(b) - mcount(a))[0], frames: held.length, holdMs: Math.round(t0 - holdStart) };
-        if (DEBUG) $("#hint").textContent = `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)}`;
+        // "I don't know": held for a while but still not sure, so say what would help instead of guessing
+        const stuck = !!META.candidate && progress >= 1 + IDK_AFTER_MS / HOLD_MS, mean = f => held.reduce((s, h) => s + f(h), 0) / held.length;
+        const idk = !stuck ? "" : mean(h => h.size) < 0.2 ? "Hold a little closer" : mean(h => h.qsure) < 0.8 ? "Hold the phone straight above the number"
+          : mean(h => h.sharp) < 80 ? "Hold steady for a moment" : "Hold a little closer, straight above the number";
+        if (idk) $("#hint").textContent = idk;
+        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)}`;
         const markVote = lastInfo.mark;
-        if (progress >= 1 && held.length >= 3 && topP >= DECIDE && topP - secondP >= MARGIN
-            && META.shellOf[topKey] === shellVote && META.markOf[topKey] === markVote) { answer(topKey); return; }
+        // rule "agree" (model 5): the classifier and the chocoprints, each voting over the held second, must name the same chocolate
+        const vote = f => { const c = {}; held.forEach(h => { const k = f(h); if (k) c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
+        const zm = k => k && k.startsWith("z") ? "z" : k;
+        const agreed = META.rule !== "agree" || (zm(vote(h => h.m4top)) === zm(topKey) && vote(h => h.pmark) === zm(topKey));
+        if (DEBUG && META.rule === "agree") $("#hint").textContent += ` | agree ${agreed ? "yes" : "no"} (${vote(h => h.m4top)} / ${vote(h => h.pmark)})`;
+        if (agreed && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)
+            && (C[topKey]?.custom ? true : META.shellOf[topKey] === shellVote && META.markOf[topKey] === markVote)) { answer(topKey); return; }
       } else {
         showMark(null);
         if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again
