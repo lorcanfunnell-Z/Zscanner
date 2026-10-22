@@ -166,7 +166,7 @@
     if (!stream) return;
     const t0 = performance.now();
     if (video.readyState >= 2) {
-      const r = Recognizer.scan(video);
+      const r = Recognizer.scan(video, undefined, { track: true });   // reuse work between frames while holding (admin model)
       const tooSmall = r.found && r.box.size < MIN_SIZE, blurry = r.found && r.sharp < MIN_SHARP;
       if (r.found && (tooSmall || blurry)) {
         // seen, but not readable: don't count this frame, and say what to do
@@ -187,8 +187,9 @@
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
             sharp: Math.round(r.sharp), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
         }
-        held = held.filter((f, i) => t0 - f.t <= HOLD_MS * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
-        const progress = (t0 - holdStart) / HOLD_MS;
+        const holdMs = META.holdMs ?? HOLD_MS;   // model 6: 0.4 s (replay: 3 frames already gave 0 wrong)
+        held = held.filter((f, i) => t0 - f.t <= holdMs * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
+        const progress = (t0 - holdStart) / holdMs;
         showMark(r, progress);
         $("#hint").textContent = progress < 1 ? "Hold still over the chocolate" : "Reading the number…";
         // average every frame in the window
@@ -202,7 +203,7 @@
         lastInfo = { avgTop3: top3(avg), nowTop3: r.ranked.slice(0, 3).map(x => ({ key: x.key, p: Math.round(x.p * 1000) / 10 })), shell: shellVote,
           mark: ["one", "two", "z"].sort((a, b) => mcount(b) - mcount(a))[0], frames: held.length, holdMs: Math.round(t0 - holdStart) };
         // "I don't know": held for a while but still not sure, so say what would help instead of guessing
-        const stuck = !!META.candidate && progress >= 1 + IDK_AFTER_MS / HOLD_MS, mean = f => held.reduce((s, h) => s + f(h), 0) / held.length;
+        const stuck = !!META.candidate && progress >= 1 + IDK_AFTER_MS / holdMs, mean = f => held.reduce((s, h) => s + f(h), 0) / held.length;
         const idk = !stuck ? "" : mean(h => h.size) < 0.2 ? "Hold a little closer" : mean(h => h.qsure) < 0.8 ? "Hold the phone straight above the number"
           : mean(h => h.sharp) < 80 ? "Hold steady for a moment" : "Hold a little closer, straight above the number";
         if (idk) $("#hint").textContent = idk;
@@ -262,3 +263,7 @@
   // Start loading the model straight away so the first scan is quick
   Recognizer.load().catch(() => {});
 })();
+
+// Speed: start loading the scanner as soon as the page has opened, so it's ready by the time Scan is pressed
+// (admin page for now; clients get it when the candidate model moves to the client page)
+if (window.ZADMIN === true) window.addEventListener("load", () => setTimeout(() => window.Recognizer && Recognizer.load().catch(() => {}), 400));

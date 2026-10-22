@@ -17,6 +17,7 @@ window.Recognizer = (() => {
 
   function load() {
     if (!loading) loading = (async () => {
+      loadStart = performance.now();
       await tf.ready();
       meta = await fetch(DIR + "/meta.json").then(r => r.json());
       const B = meta.base || DIR;                               // a candidate can reuse the proven finder and reader
@@ -30,6 +31,7 @@ window.Recognizer = (() => {
           if (cu) { gallery.custom = Object.keys(cu.chocolates || {}); (cu.prints || []).forEach(([k, v]) => (gallery.byMark[k] = gallery.byMark[k] || []).push(v)); } } catch (e) {}
       }
       tf.tidy(() => { for (const m of [finder, reader, quarter, printer]) if (m) m.predict(tf.zeros([1, S, S, 3])); }); // warm up
+      loadMs = performance.now() - loadStart;
     })();
     return loading;
   }
@@ -88,23 +90,45 @@ window.Recognizer = (() => {
   }
 
   // Look at one square of the source. Returns { found, obj, box: {cx, cy, size} (0..1 of the square), ranked }
-  function scan(source, sq) {
+  // stopwatch per step of the latest scan (ms), for the admin speed test; dataSync() waits for the phone's GPU, so these are real
+  let times = {}, tl = 0; const lap = k => { const n = performance.now(); times[k] = (times[k] || 0) + n - tl; tl = n; };
+  let loadMs = 0, loadStart = 0;
+  // Speed (opts.track, live camera only): while someone holds still, the finder runs every other frame (the box is
+  // reused in between) and "which side is up" is only re-checked when the angle changes. prev = the last frame's results.
+  let prev = null, nFrame = 0;
+  function scan(source, sq, opts = {}) {
+    times = {}; tl = performance.now(); nFrame++;
     const { w, h } = srcSize(source);
     sq = sq || { x: (w - Math.min(w, h)) / 2, y: (h - Math.min(w, h)) / 2, size: Math.min(w, h) };
-    const fin = tf.tidy(() => finder.predict(grab(source, sq.x, sq.y, sq.size).expandDims(0)));
-    const obj = fin[0].dataSync()[0], [cx, cy, bs] = fin[1].dataSync(); tf.dispose(fin);
-    const box = { cx, cy, size: Math.max(0.08, bs) };
+    const now = performance.now(), recent = opts.track && prev && now - prev.t < Math.max(250, 3 * prev.dur);
+    let obj, cx, cy, bs;
+    if (recent && nFrame % 2 === 0) ({ obj, cx, cy, bs } = prev.fin);   // reuse the box on alternate frames while holding
+    else {
+      const fin = tf.tidy(() => finder.predict(grab(source, sq.x, sq.y, sq.size).expandDims(0)));
+      obj = fin[0].dataSync()[0]; [cx, cy, bs] = fin[1].dataSync(); tf.dispose(fin);
+    }
+    if (!opts.track) prev = null;
+    const box = { cx, cy, size: Math.max(0.08, bs) }; lap("finder");
+    if (obj < 0.5) { prev = null; return { found: false, obj, box }; }
     if (obj < 0.5) return { found: false, obj, box };
     const side = box.size * meta.readerPad * sq.size, x = sq.x + cx * sq.size - side / 2, y = sq.y + cy * sq.size - side / 2;
     grab(source, x, y, side).dispose();
-    const sharp = sharpness();
+    const sharp = sharpness(); lap("crop + sharpness");
     let pid, psh, pmk, rot = 0, qsure = 1;
     if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
     else if (!meta.align) {                                    // reader reads as it is; straightening is only for the chocoprint
-      [pid, psh, pmk] = readAt(source, x, y, side, 0);
-      const e = edgeAngle(); const sqd = grab(source, x, y, side, -e);
-      const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
-      const q = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a])[0]; qsure = pq[q]; rot = -e + 90 * q;
+      [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
+      const e = edgeAngle(); lap("straighten (edges)");
+      const de = prev ? Math.abs(((e - prev.e) % 90 + 135) % 90 - 45) : 99;   // change in angle since last frame (mod 90)
+      let q;
+      if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8) { q = prev.q; qsure = prev.qsure; }   // same way up as a moment ago
+      else {
+        const sqd = grab(source, x, y, side, -e);
+        const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
+        q = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a])[0]; qsure = pq[q];
+      }
+      rot = -e + 90 * q; lap("which side is up");
+      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs }, e, q, qsure };
     } else {
       const e = edgeAngle();                                   // 1. square it up
       const sqd = grab(source, x, y, side, -e);
@@ -127,7 +151,7 @@ window.Recognizer = (() => {
         // black-and-white (shape only) when the chocoprint model was trained that way
         const inp = gallery.gray ? zc.mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(2, true).tile([1, 1, 3]) : zc;
         const e = printer.predict(inp.expandDims(0)); return e.div(tf.norm(e, 2, -1, true).add(1e-9));
-      }).dataSync(); zc.dispose();
+      }).dataSync(); zc.dispose(); lap("chocoprint");
       const sims = {};
       for (const [m, refs] of Object.entries(gallery.byMark)) {
         const ss = refs.map(r => { let d = 0; for (let k = 0; k < r.length; k++) d += r[k] * v[k]; return d; }).sort((a, b) => b - a);
@@ -143,6 +167,7 @@ window.Recognizer = (() => {
       // an added chocolate isn't known to the classifier, so it is recognised by its print alone, and only when clearly closest
       if ((gallery.custom || []).includes(print.mark) && print.sim >= 0.6 && print.gap >= 0.08)
         ranked = [{ key: print.mark, p: 0.9 }, ...ranked.map(r => ({ key: r.key, p: r.p * 0.1 }))];
+      lap("gallery compare");
     }
     return { found: true, obj, box, sharp, rot, qsure, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
@@ -161,5 +186,5 @@ window.Recognizer = (() => {
   // the last close-up the reader looked at (for the debug test log)
   const snapshot = () => canvas.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get model() { return DIR; }, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
+  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader; }, get backend() { return tf.getBackend(); } };
 })();

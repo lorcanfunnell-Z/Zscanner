@@ -112,5 +112,6 @@
   "rule": "agree-or-99",
   "decide": 0.5,
   "margin": 0.2,
-  "sure": 0.99
+  "sure": 0.99,
+  "holdMs": 400
 }

@@ -32,5 +32,6 @@
   document.getElementById("modeTest").onclick = () => { document.querySelector(".tl")?.scrollIntoView({ behavior: "smooth" }); };
   document.getElementById("modeCollect").onclick = () => window.ZCollect && window.ZCollect.open();
   document.getElementById("modeAdd").onclick = () => window.ZAddChoc && window.ZAddChoc.open();
+  document.getElementById("modeSpeed").onclick = () => window.ZSpeed && window.ZSpeed.open();
   document.getElementById("modeLock").onclick = () => { try { localStorage.removeItem(KEY); } catch {} location.reload(); };
 })();
