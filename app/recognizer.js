@@ -80,6 +80,14 @@ window.Recognizer = (() => {
     const g = tf.browser.fromPixels(canvas).toFloat().mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(2).expandDims(0).expandDims(-1);
     return tf.moments(tf.conv2d(g, LAP, 1, "valid")).variance.dataSync()[0];
   });
+  // Light on the chocolate (middle half of the close-up): how bright its brighter parts are (90th percentile, 0-255)
+  // and the share of blown-out pixels (a reflection). In tests 1-3 every close-up under 56 was read wrong.
+  function light() {
+    const d = ctx.getImageData(S / 4, S / 4, S / 2, S / 2).data, hist = new Uint32Array(256); let blown = 0;
+    for (let i = 0; i < d.length; i += 4) { const y = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]); hist[y]++; if (d[i] >= 250 && d[i + 1] >= 250 && d[i + 2] >= 250) blown++; }
+    const n = d.length / 4; let c = 0, p90 = 255; for (let v = 0; v < 256; v++) { c += hist[v]; if (c >= 0.9 * n) { p90 = v; break; } }
+    return { p90, glare: blown / n };
+  }
   const srcSize = s => ({ w: s.videoWidth || s.naturalWidth || s.width, h: s.videoHeight || s.naturalHeight || s.height });
 
   // the logic step: chocolate score × shell score × mark score, renormalised
@@ -113,7 +121,7 @@ window.Recognizer = (() => {
     if (obj < 0.5) return { found: false, obj, box };
     const side = box.size * meta.readerPad * sq.size, x = sq.x + cx * sq.size - side / 2, y = sq.y + cy * sq.size - side / 2;
     grab(source, x, y, side).dispose();
-    const sharp = sharpness(); lap("crop + sharpness");
+    const sharp = sharpness(), lit = light(); lap("crop + sharpness");
     let pid, psh, pmk, rot = 0, qsure = 1;
     if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
     else if (!meta.align) {                                    // reader reads as it is; straightening is only for the chocoprint
@@ -169,7 +177,7 @@ window.Recognizer = (() => {
         ranked = [{ key: print.mark, p: 0.9 }, ...ranked.map(r => ({ key: r.key, p: r.p * 0.1 }))];
       lap("gallery compare");
     }
-    return { found: true, obj, box, sharp, rot, qsure, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+    return { found: true, obj, box, sharp, light: lit, rot, qsure, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
   // For still photos: try a few squares along the long side and keep the most confident result

@@ -19,6 +19,8 @@
   const MARGIN = 0.30;      // ...and this far ahead of the second guess
   const MIN_SHARP = 45;     // close-ups less sharp than this are skipped (the number can't be read)
   const MIN_SIZE = 0.13;    // chocolate smaller than this share of the view: ask to move closer
+  const MIN_LIGHT = 50;      // model 6: chocolate's brighter parts darker than this → too dark to read (tests 1-3: all such scans wrong)
+  const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
   const IDK_AFTER_MS = 2000; // candidate model (admin): after the hold, this long without an answer → say what would help
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
@@ -168,10 +170,13 @@
     if (video.readyState >= 2) {
       const r = Recognizer.scan(video, undefined, { track: true });   // reuse work between frames while holding (admin model)
       const tooSmall = r.found && r.box.size < MIN_SIZE, blurry = r.found && r.sharp < MIN_SHARP;
-      if (r.found && (tooSmall || blurry)) {
+      // model 6 (admin): too dark or a strong reflection → don't read this frame, say what to do
+      const tooDark = !!META.candidate && r.found && r.light && r.light.p90 < MIN_LIGHT;
+      const glare = !!META.candidate && r.found && r.light && r.light.glare > MAX_GLARE;
+      if (r.found && (tooSmall || blurry || tooDark || glare)) {
         // seen, but not readable: don't count this frame, and say what to do
         lastSeen = t0; showMark(r, 0);
-        $("#hint").textContent = tooSmall ? "Move a little closer" : "Too blurry, hold steady";
+        $("#hint").textContent = tooSmall ? "Move a little closer" : tooDark ? "Too dark, find more light" : glare ? "Tilt slightly to avoid the reflection" : "Too blurry, hold steady";
         if (DEBUG) $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}%`;
       } else if (r.found) {
         lastSeen = t0;
@@ -185,7 +190,7 @@
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
-            sharp: Math.round(r.sharp), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
+            sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
         }
         const holdMs = META.holdMs ?? HOLD_MS;   // model 6: 0.4 s (replay: 3 frames already gave 0 wrong)
         held = held.filter((f, i) => t0 - f.t <= holdMs * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
@@ -240,7 +245,16 @@
         setStatus(`<img class="thumb" src="${url}" alt=""><span>We couldn't find a chocolate in this photo. Try again from above, a little closer.</span>`, "err");
         return;
       }
-      if (best[0].p >= PHOTO_SURE) {
+      if (META.candidate && res.light && res.light.p90 < MIN_LIGHT) {
+        setStatus(`<img class="thumb" src="${url}" alt=""><span>This photo is too dark to read the number. Please try again with more light.</span>`, "err");
+        return;
+      }
+      // model 6: the same rule as live scanning (both opinions agree, or 99% sure); otherwise offer the likeliest choices
+      const zk = k => k && k.startsWith("z") ? "z" : k;
+      const photoSure = META.rule === "agree-or-99"
+        ? (zk(res.m4top) === zk(best[0].key) && res.print?.mark === zk(best[0].key)) || best[0].p >= (META.sure ?? 0.99)
+        : best[0].p >= PHOTO_SURE;
+      if (photoSure) {
         render(best[0].key, { scanned: true });
         setStatus(`<img class="thumb" src="${url}" alt=""><span>Found: ${esc(label(best[0].key))}</span>`);
         $("#suggest").hidden = true;

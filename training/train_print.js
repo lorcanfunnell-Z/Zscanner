@@ -171,8 +171,11 @@ function zoomView(a, aug) {
   const j = aug ? jitter(false) : {}; j.angle = (a.rot || 0) + (aug ? between(-10, 10) : 0);
   if (aug) { delete j.lowres; }
   const buf = view(a.file, cx + (aug ? between(-.07, .07) * side : 0), cy + (aug ? between(-.07, .07) * side : 0), z, j);
-  return GRAY ? buf.then(toGray) : buf;
+  const harsh = aug && HARSHAUG && rnd() < .3 ? { dim: between(.3, .7), grain: between(4, 16) } : null;   // a dim, grainy room
+  return (GRAY ? buf.then(toGray) : buf).then(b => harsh ? dimGrain(b, harsh) : b);
 }
+const HARSHAUG = process.env.HARSHAUG === "1";
+function dimGrain(b, { dim, grain }) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.length; i += 3) { const n = (rnd() + rnd() + rnd() - 1.5) * grain; for (let c = 0; c < 3; c++) o[i + c] = Math.max(0, Math.min(255, Math.round(b[i + c] * dim + n))); } return o; }
 // Shape only: the chocoprint sees black-and-white, so it can't take the colour shortcut ("reddish = 16");
 // shell colour is judged by the reader instead.
 function toGray(b) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.length; i += 3) { const g = Math.round(0.299 * b[i] + 0.587 * b[i + 1] + 0.114 * b[i + 2]); o[i] = o[i + 1] = o[i + 2] = g; } return o; }

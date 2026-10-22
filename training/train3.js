@@ -190,7 +190,7 @@ async function trainLoop(model, items, epochs, makeBatch, lossFn, label) {
     realTests: testScans.length ? await check(testScans, TESTS ? "real test scans (trained on, not a fair check)" : "real test scans (never trained on)") : null };
   if (EVAL_ONLY) return;
   await reader.save("file://" + path.join(OUT, "reader"));
-  const F = path.join(ROOT, "app", "model2", "finder"); fs.mkdirSync(path.join(OUT, "finder"), { recursive: true });
+  const F = path.join(ROOT, "app", "model4", "finder"); fs.mkdirSync(path.join(OUT, "finder"), { recursive: true });
   for (const f of fs.readdirSync(F)) fs.copyFileSync(path.join(F, f), path.join(OUT, "finder", f));
   fs.writeFileSync(path.join(OUT, "meta.json"), JSON.stringify({ ids: IDS, shells: SHELLS, marks: MARKS, shellOf: Object.fromEntries(IDS.map(k => [k, shellOf(k)])), markOf: Object.fromEntries(IDS.map(k => [k, markOf(k)])), input: S, scale: "x/127.5-1", readerPad: PAD, finderView: "centre square of the camera, full width" }, null, 2));
   fs.writeFileSync(path.join(OUT, "training-report.json"), JSON.stringify(report, null, 2));

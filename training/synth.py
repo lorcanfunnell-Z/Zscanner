@@ -15,6 +15,7 @@ DES = os.path.join(ROOT, "designs")
 OUT = os.path.join(ROOT, "training-synth")
 PER = int(sys.argv[1]) if len(sys.argv) > 1 else 150
 SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+HARSH = os.environ.get("HARSH") == "1"   # tougher lighting: dim rooms, grazing light, flat light, grain
 R = random.Random(SEED); np.random.seed(SEED)
 u = R.uniform
 
@@ -63,12 +64,12 @@ def chocolate(k):
     # ---- lighting ----
     gy, gx = np.gradient(H)
     nz = np.ones_like(H); n = np.sqrt(gx * gx + gy * gy + nz * nz); nx, ny, nz = -gx / n, -gy / n, nz / n
-    az, el = u(0, 2 * math.pi), u(.35, 1.35)                   # light direction (azimuth, elevation)
+    az, el = u(0, 2 * math.pi), (u(.15, .6) if HARSH and R.random() < .5 else u(.35, 1.35))   # light direction; harsh: low, grazing light
     L = np.array([math.cos(az) * math.cos(el), math.sin(az) * math.cos(el), math.sin(el)])
     lam = np.clip(nx * L[0] + ny * L[1] + nz * L[2], 0, 1)
     hx, hy, hz = L[0], L[1], L[2] + 1; hn = math.sqrt(hx * hx + hy * hy + hz * hz)
     spec = np.clip((nx * hx + ny * hy + nz * hz) / hn, 0, 1) ** u(20, 80) * u(.2, 1.1)   # gloss
-    amb = u(.35, .7)
+    amb = u(.12, .9) if HARSH else u(.35, .7)
     base = np.array(SHELL_RGB[sh], np.float32) * np.array([u(.94, 1.06), u(.95, 1.05), u(.93, 1.07)]) * u(.8, 1.2)
     shade = amb + (1 - amb) * lam / max(.2, L[2])
     img = base[None, None, :] * shade[..., None] + 255 * spec[..., None] * np.array([1, .98, .95])
@@ -135,9 +136,11 @@ def photo(k, W=448):
         m = (np.cos(t) * (xx - .5) + np.sin(t) * (yy - .5) > u(-.3, .3)).astype(np.float32)
         a *= 1 - ndi.gaussian_filter(m, u(1, 8))[..., None] * u(.25, .6)
     # exposure, white balance, gamma
-    a *= u(.7, 1.3); a *= np.array([u(.95, 1.05), 1, u(.9, 1.06)])
+    a *= u(.3, 1.6) if HARSH else u(.7, 1.3); a *= np.array([u(.95, 1.05), 1, u(.9, 1.06)])
+    if HARSH and R.random() < .5:                              # flat, low-contrast light
+        c = u(.5, .8); a = a.mean() + (a - a.mean()) * c
     a = 255 * (np.clip(a, 0, 255) / 255) ** u(.8, 1.3)
-    a += np.random.randn(W, W, 1) * u(0, 6)
+    a += np.random.randn(W, W, 1) * (u(0, 18) if HARSH else u(0, 6))   # sensor grain (much more in dim light)
     img = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
     r = R.random()
     if r < .25: img = img.filter(ImageFilter.GaussianBlur(u(.5, 2.0)))                          # slightly out of focus

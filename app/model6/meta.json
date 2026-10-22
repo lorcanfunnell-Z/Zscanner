@@ -106,12 +106,13 @@
   "finderView": "centre square of the camera, full width",
   "print": true,
   "align": false,
-  "printFrom": "ArcFace, black-and-white, zoom 0.62, Stage 4 hard pairs + mining",
+  "printFrom": "ArcFace, black-and-white, zoom 0.62, hard pairs + mining, tougher lighting (dim, grain, flat, grazing light)",
   "candidate": true,
-  "base": "model4",
   "rule": "agree-or-99",
   "decide": 0.5,
   "margin": 0.2,
   "sure": 0.99,
-  "holdMs": 400
+  "holdMs": 400,
+  "weights": "16-bit (half the download; fair check unchanged)",
+  "version": "6.1"
 }
