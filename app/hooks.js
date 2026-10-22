@@ -1,4 +1,5 @@
-// zScanner hooks (ideas 1, 2 and 4). Shown after a successful scan, in the site's style, never as a pop-up.
+// zScanner hooks (ideas 1, 2 and 4). Calm by design: the 1st chocolate shows only the chocolate; then at most ONE extra
+// per result (welcome offer once from the 2nd, thank-you once from the 3rd); the email form stays behind a button.
 // Off for recipients until switched on in hooks-config.js; the admin page always shows a preview.
 //   1. Welcome offer: an invitation under the result card linking to sign-up (zs=1 tells zchocolat.com to tag the account).
 //   2. My tasting: hearts on result cards, a tasting list kept on this phone, and "Email me my favourites".
@@ -61,9 +62,10 @@
   const isFav = k => tasting.favs.includes(k);
   function toggleFav(k) { tasting.favs = isFav(k) ? tasting.favs.filter(x => x !== k) : [...tasting.favs, k]; save(); drawList(); }
 
-  let section = null;
+  let section = null, formOpen = false;
+  // The tasting list appears from the 2nd chocolate; the email form stays behind one button until tapped.
   function drawList() {
-    if (!on("tasting") || !tasting.items.length) { if (section) section.hidden = true; return; }
+    if (!on("tasting") || tasting.items.length < 2) { if (section) section.hidden = true; return; }
     if (!section) {
       section = document.createElement("section"); section.className = "hk-tasting"; section.setAttribute("aria-labelledby", "hkTitle");
       $("#result").insertAdjacentElement("afterend", section);
@@ -76,44 +78,71 @@
       <h2 id="hkTitle">Your tasting so far</h2>
       <ul class="hk-list">${order.map(i => `<li><img src="${photo(i.key)}" alt="" onerror="this.onerror=null;this.src='images/${esc(i.key)}.jpg'"><span class="nm">${esc(label(i.key))}</span>
         <button type="button" data-k="${esc(i.key)}" aria-pressed="${isFav(i.key)}" aria-label="Favourite">${isFav(i.key) ? "♥" : "♡"}</button></li>`).join("")}</ul>
-      <form class="hk" id="hkForm" novalidate>
-        <p><b style="color:var(--ink);font-weight:500">${n ? `Email me my ${n === 1 ? "favourite" : n + " favourites"}` : "Email me my tasting"}</b></p>
+      ${!n ? `<p class="wrong">Tap ♡ on the ones you love to keep them.</p>`
+        : !formOpen ? `<button class="btn btn-outline-dark" type="button" id="hkOpen">Email me my ${n === 1 ? "favourite" : n + " favourites"}</button>`
+        : `<form class="hk" id="hkForm" novalidate>
         <input type="email" id="hkEmail" placeholder="Your email address" autocomplete="email" required>
         <label><input type="checkbox" id="hkNews"> Send me zChocolat news and offers</label>
         <small>We'll use your email to send this list${H.privacyUrl ? `; see our <a href="${esc(H.privacyUrl)}" target="_blank" rel="noopener">privacy policy</a>` : ""}.</small>
-        <button class="btn btn-dark" type="submit">Send</button>
+        <button class="btn btn-dark" type="submit">Send my ${n === 1 ? "favourite" : "favourites"}</button>
         <p id="hkMsg" role="status"></p>
-      </form>`;
+      </form>`}`;
     section.querySelectorAll(".hk-list button").forEach(b => b.onclick = () => { toggleFav(b.dataset.k); syncHeart(); });
-    section.querySelector("#hkForm").onsubmit = async e => {
+    const open = section.querySelector("#hkOpen"); if (open) open.onclick = () => { formOpen = true; drawList(); section.querySelector("#hkEmail").focus(); };
+    const form = section.querySelector("#hkForm");
+    if (form) form.onsubmit = async e => {
       e.preventDefault();
       const email = section.querySelector("#hkEmail").value.trim(), msg = section.querySelector("#hkMsg");
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = "Please check your email address."; return; }
-      const favs = tasting.favs.length ? tasting.favs : tasting.items.map(i => i.key);
-      const r = await send("favourites", { email, favourites: favs, newsletter: section.querySelector("#hkNews").checked, lang: "en" });
+      const r = await send("favourites", { email, favourites: tasting.favs, newsletter: section.querySelector("#hkNews").checked, lang: "en" });
       msg.innerHTML = r.preview ? `<span class="hk-preview">Preview (module not connected yet), would send:\n${esc(r.body)}</span>`
         : r.ok ? "Sent, check your inbox." : "Sorry, that didn't send. Please try again in a moment.";
     };
   }
   function syncHeart() { const b = $("#hkHeart"); if (b) { const k = b.dataset.k; b.setAttribute("aria-pressed", isFav(k)); b.innerHTML = `<span>${isFav(k) ? "♥" : "♡"}</span>${isFav(k) ? "In your favourites" : "Add to favourites"}`; } }
 
-  // ---------- after each result ----------
-  let welcomeShown = false;
-  try { welcomeShown = sessionStorage.getItem("zscanner-welcome") === "1"; } catch (e) {}
+  // ---------- after each result: calm, one extra at a time ----------
+  // 1st chocolate: just the chocolate. Welcome offer once, from the 2nd. Thank-you once, from the 3rd.
+  // Never two extras on the same result. Counted per visit (this browser tab).
+  const visit = (() => { try { return JSON.parse(sessionStorage.getItem("zscanner-visit")) || null; } catch (e) { return null; } })() || { scans: 0, welcome: false, thanks: false, onCard: {} };
+  const saveVisit = () => { try { sessionStorage.setItem("zscanner-visit", JSON.stringify(visit)); } catch (e) {} };
+
+  function welcomeBox(key) {
+    const u = new URL(H.welcome.signupUrl); u.searchParams.set("zs", "1");
+    u.searchParams.set("utm_source", "zscanner"); u.searchParams.set("utm_medium", "gift_recipient"); u.searchParams.set("utm_campaign", "welcome_offer"); u.searchParams.set("utm_content", key);
+    const name = C[key].z ? C[key].name : `N°${key}`;
+    return `<div class="hk"><p>Enjoying ${esc(name)}? Create your zChocolat account and enjoy ${esc(H.welcome.offer)}.</p>
+      <a class="btn btn-outline-dark" href="${esc(u.toString())}" target="_blank" rel="noopener">Create my account</a></div>`;
+  }
+  function thanksBox() {
+    const sent = store.get("zscanner-thanked-" + code, false);
+    return `<div class="hk"><p>${sent ? "Your thank-you has been sent." : "Enjoying your gift? Let the sender know."}</p>
+      ${sent ? "" : `<button class="btn btn-outline-dark" type="button" id="hkThanks">Say thank you</button>`}<p id="hkThanksMsg" role="status"></p></div>`;
+  }
+
   window.addEventListener("zfound", e => {
     const { key, scanned, repeat } = e.detail, card = $("#result .card"); if (!card || !C[key]) return;
     const actions = card.querySelector(".card-actions");
-    if (scanned && !repeat && on("tasting") && !tasting.items.some(i => i.key === key)) { tasting.items.push({ key, t: Date.now() }); save(); }
-    if (scanned && !repeat && on("corporate") && code) send("scan", { o: code, device, choc: key });
+    if (scanned && !repeat) {
+      visit.scans++;
+      if (on("tasting") && !tasting.items.some(i => i.key === key)) { tasting.items.push({ key, t: Date.now() }); save(); }
+      if (on("corporate") && code) send("scan", { o: code, device, choc: key });
+      // which single extra (if any) belongs to this result
+      let extra = null;
+      if (on("welcome") && !visit.welcome && visit.scans >= 2) { extra = "welcome"; visit.welcome = true; }
+      else if (on("corporate") && code && !visit.thanks && !store.get("zscanner-thanked-" + code, false) && visit.scans >= 3) { extra = "thanks"; visit.thanks = true; }
+      visit.onCard[key] = extra; saveVisit();
+    }
+    if (!scanned) { drawList(); return; }
 
-    if (on("tasting") && scanned) {
+    if (on("tasting")) {
       actions.insertAdjacentHTML("beforebegin", `<button class="hk-heart" id="hkHeart" type="button" data-k="${esc(key)}"></button>`);
       syncHeart(); $("#hkHeart").onclick = () => { toggleFav(key); syncHeart(); };
     }
-    if (on("corporate") && code && scanned) {
-      const sent = store.get("zscanner-thanked-" + code, false);
-      actions.insertAdjacentHTML("afterend", `<div class="hk"><p>${sent ? "Your thank-you has been sent to the person who gave you these chocolates." : "Enjoying your gift? Let the sender know."}</p>
-        ${sent ? "" : `<button class="btn btn-outline-dark" type="button" id="hkThanks">Say thank you</button>`}<p id="hkThanksMsg" role="status"></p></div>`);
+    const extra = visit.onCard[key];
+    if (extra === "welcome") card.insertAdjacentHTML("beforeend", welcomeBox(key));
+    if (extra === "thanks") {
+      card.insertAdjacentHTML("beforeend", thanksBox());
       const b = $("#hkThanks");
       if (b) b.onclick = async () => {
         b.disabled = true; const r = await send("thanks", { o: code, device });
@@ -121,15 +150,6 @@
         else if (r.ok) { store.set("zscanner-thanked-" + code, true); b.remove(); $("#hkThanksMsg").textContent = "Thank you sent."; }
         else { b.disabled = false; $("#hkThanksMsg").textContent = "Sorry, that didn't send. Please try again."; }
       };
-    }
-    if (on("welcome") && scanned && (!welcomeShown || ADMIN || repeat)) {
-      const u = new URL(H.welcome.signupUrl); u.searchParams.set("zs", "1");
-      u.searchParams.set("utm_source", "zscanner"); u.searchParams.set("utm_medium", "gift_recipient"); u.searchParams.set("utm_campaign", "welcome_offer"); u.searchParams.set("utm_content", key);
-      const name = C[key].z ? C[key].name : `N°${key}`;
-      card.insertAdjacentHTML("beforeend", `<div class="hk"><p class="eyebrow dark">Welcome offer</p>
-        <p>Enjoying ${esc(name)}? Create your zChocolat account and enjoy ${esc(H.welcome.offer)}.</p>
-        <a class="btn btn-outline-dark" href="${esc(u.toString())}" target="_blank" rel="noopener">Create my account</a></div>`);
-      welcomeShown = true; try { sessionStorage.setItem("zscanner-welcome", "1"); } catch (e) {}
     }
     drawList();
   });
