@@ -74,6 +74,8 @@
     const fix = $("#fixBtn"); if (fix) fix.onclick = () => $("#grid").scrollIntoView({ behavior: "smooth", block: "center" });
     document.querySelectorAll(".key").forEach(k => k.setAttribute("aria-current", String(k.dataset.k === key || (k.dataset.k === "z" && !!c.z))));
     if (!opts.example && !opts.keepScroll) $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+    // for hooks.js (welcome offer, tasting list, corporate counting); repeat = the same result redrawn (e.g. Z colour change)
+    if (!opts.example) window.dispatchEvent(new CustomEvent("zfound", { detail: { key, scanned: !!opts.scanned, repeat: !!opts.keepScroll } }));
   }
 
   // ---------- Number tray ----------
