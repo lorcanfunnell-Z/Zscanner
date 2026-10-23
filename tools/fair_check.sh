@@ -4,12 +4,13 @@
 # and the held-back test session), then prints: the answering rules (answered / wrong), and how many held frames
 # the D+ rule needs (replay of recorded sequences).
 #
-# Usage: tools/fair_check.sh <name> <reader model.json> <chocoprint folder (has print/ and gallery.json)> [held test, default test-3]
+# Usage: tools/fair_check.sh <name> <reader model.json> <chocoprint folder (has print/ and gallery.json)> [held test, default: first in training/sessions.json]
 # Example (model 6): tools/fair_check.sh model6 app/model4/reader/model.json app/model6
 # Results also saved in experiments/fair-check-<name>.txt
 set -e
 cd "$(dirname "$0")/.."
-NAME=$1; READER=$2; PRINT=$3; HOLD=${4:-test-3}
+NAME=$1; READER=$2; PRINT=$3
+HOLD=${4:-$(python3 -c "import json;print(json.load(open('training/sessions.json'))['heldBack'][0])" 2>/dev/null || echo test-3)}   # the session never seen (training/sessions.json)
 [ -z "$PRINT" ] && { sed -n 2,9p "$0"; exit 1; }
 GRAY=$(python3 -c "import json;print(1 if json.load(open('$PRINT/gallery.json')).get('gray') else 0)")
 OUT=experiments/fair-check-$NAME.txt; mkdir -p experiments /tmp/zfair

@@ -136,6 +136,7 @@ window.Recognizer = (() => {
     if (obj < 0.5) return { found: false, obj, box };
     const side = box.size * meta.readerPad * sq.size, x = sq.x + cx * sq.size - side / 2, y = sq.y + cy * sq.size - side / 2;
     grab(source, x, y, side).dispose();
+    snapCtx.drawImage(canvas, 0, 0);   // keep the standard close-up (whole chocolate, as seen) for the test log and gallery
     const sharp = sharpness(), lit = light(); lap("crop + sharpness");
     let pid, psh, pmk, rot = 0, qsure = 1;
     if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
@@ -207,7 +208,10 @@ window.Recognizer = (() => {
   }
 
   // the last close-up the reader looked at (for the debug test log)
-  const snapshot = () => canvas.toDataURL("image/jpeg", 0.85);
+  // The standard close-up of the latest scan: the whole chocolate with its margin, unturned, in colour. (The canvas itself
+  // may end up holding the zoomed, straightened view used for the chocoprint, which isn't what tests and the gallery need.)
+  const snapCan = document.createElement("canvas"); snapCan.width = snapCan.height = S; const snapCtx = snapCan.getContext("2d");
+  const snapshot = () => snapCan.toDataURL("image/jpeg", 0.85);
 
   return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
 })();

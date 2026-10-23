@@ -198,6 +198,7 @@ function toGray(b) { const o = Buffer.alloc(b.length); for (let i = 0; i < b.len
       const T = 20, mx = Math.max(...Object.values(ms)), ex = Object.fromEntries(Object.entries(ms).map(([m, s]) => [m, Math.exp(T * (s - mx))])), z = Object.values(ex).reduce((u, w) => u + w, 0);
       const pp = IDS.map(k => ex[mk(k)] / z);                       // print opinion per chocolate (Z variants share it)
       const prod = IDS.map((k, n) => m4[n] * pp[n]), ps = prod.reduce((u, w) => u + w, 0);
+      if (process.env.NNCHECK) { let best = -2, bl = ""; gal.entries.forEach(([m, v]) => { const s2 = v.reduce((acc, x, k) => acc + x * E[j][k], 0); if (s2 > best) { best = s2; bl = m; } }); console.log("NN", a.cls, bl, best.toFixed(3)); }
       rows.push({ truth: a.cls, m4, pp, both: prod.map(v => v / ps), sim: ms });
     });
   }

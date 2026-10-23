@@ -33,6 +33,7 @@
   document.getElementById("modeCollect").onclick = () => window.ZCollect && window.ZCollect.open();
   document.getElementById("modeAdd").onclick = () => window.ZAddChoc && window.ZAddChoc.open();
   document.getElementById("modeSpeed").onclick = () => window.ZSpeed && window.ZSpeed.open();
+  document.getElementById("modeRef").onclick = () => window.ZReference && window.ZReference.open();
   document.getElementById("modeLock").onclick = () => { try { localStorage.removeItem(KEY); } catch {} location.reload(); };
 })();
 

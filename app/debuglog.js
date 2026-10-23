@@ -47,12 +47,14 @@
     <h3>Test log</h3>
     <div><label for="tlNote">Place and light (saved with each scan)</label><input id="tlNote" placeholder="e.g. office desk, daylight, in the box" value="${esc(getNote())}"></div>
     <div class="stats" id="tlStats"></div>
+    <p id="tlTally" style="margin:0;font-size:13px;color:var(--text)"></p>
     <div id="tlCurrent"></div>
     <button class="btn btn-dark" id="tlZip" type="button">Download test log (.zip)</button>
     <button class="tl-link" id="tlClear" type="button">Clear the test log</button>`;
   panel.querySelector("#tlNote").oninput = e => setNote(e.target.value);
 
   async function stats() {
+    tallyLine();
     const rows = await all(), labelled = rows.filter(r => r.correct !== undefined && r.correct !== null);
     const right = labelled.filter(r => r.correct).length, wrong = labelled.filter(r => r.type === "answer" && !r.correct).length;
     const none = labelled.filter(r => r.type === "noanswer").length;
@@ -60,6 +62,20 @@
       <div><b>${labelled.length}</b><span>scans</span></div><div><b>${right}</b><span>right</span></div>
       <div><b>${wrong}</b><span>wrong</span></div><div><b>${labelled.length ? Math.round(100 * right / labelled.length) : 0}%</b><span>accuracy</span></div>`
       + (none ? `<div style="grid-column:1/-1"><span>${none} gave no answer</span></div>` : "");
+  }
+
+  // ---------- running total across ALL test sessions on this phone, per model (clearing the log keeps it) ----------
+  // "Proven better than 1 wrong in N": with W wrong in A answered, the true error rate is below U/A with 95% confidence
+  // (U = 3.0 for 0 wrong, 4.7 for 1, 6.3 for 2, …), so N = A / U. This is how many fair scans a claim needs.
+  const TALLY = "zscanner-tally-v1";
+  const getTally = () => { try { return JSON.parse(localStorage.getItem(TALLY)) || {}; } catch { return {}; } };
+  const record = e => { const t = getTally(), m = (window.Recognizer && Recognizer.model) || "model"; (t[m] = t[m] || {})[e.at] = [e.type === "answer" ? 1 : 0, e.correct ? 1 : 0]; try { localStorage.setItem(TALLY, JSON.stringify(t)); } catch {} };
+  function tallyLine() {
+    const m = (window.Recognizer && Recognizer.model) || "model", rows = Object.values(getTally()[m] || {});
+    const scans = rows.length, answered = rows.filter(r => r[0]).length, wrong = rows.filter(r => r[0] && !r[1]).length;
+    const U = [3.0, 4.74, 6.3, 7.75, 9.15, 10.51].at(wrong) ?? (wrong + 2 * Math.sqrt(wrong) + 2);
+    const proof = answered < 30 ? "too few scans yet to prove a rate" : `proven better than 1 wrong in ${Math.floor(answered / U)} (95% confidence)`;
+    panel.querySelector("#tlTally").innerHTML = scans ? `<b style="font-weight:500;color:var(--ink)">All tests with ${esc(m)} on this phone:</b> ${scans} scans, ${answered} answered (${Math.round(100 * answered / scans)}%), ${wrong} wrong · ${proof}` : "";
   }
 
   let n = 0;
@@ -101,7 +117,7 @@
         ${KEYS.map(k => `<button type="button" data-k="${k}" class="${k.startsWith("z") ? "w" : ""}">${k.startsWith("z") ? C[k].name.replace(" Chocolate", "") : k}</button>`).join("")}
       </div></div>`;
     const done = async (truth) => {
-      e.truth = truth; e.correct = e.type === "answer" && truth === e.guess; await put(e); await stats();
+      e.truth = truth; e.correct = e.type === "answer" && truth === e.guess; await put(e); record(e); await stats();
       cur.innerHTML = `<div class="tl-card"><span class="${e.correct ? "ok" : "bad"}">Scan ${e.n} saved: ${e.correct ? "right" : e.type === "answer" ? `wrong, it was ${esc(name(truth))}` : `no answer, it was ${esc(name(truth))}`}</span>
         <button class="btn btn-dark" id="tlNext" type="button">Scan the next chocolate</button></div>`;
       cur.querySelector("#tlNext").onclick = () => { window.scrollTo({ top: 0, behavior: "smooth" }); document.getElementById("camBtn").click(); };
