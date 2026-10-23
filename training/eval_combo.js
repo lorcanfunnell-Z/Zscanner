@@ -4,11 +4,16 @@
 //   otherwise     → the held-back test session(s) (training/sessions.json "heldBack", or HOLD_TEST=test-3)
 // Options: READER=<reader model.json>  PRINT=<folder with print/ and gallery.json>  DUMP=<file> (raw scores for
 //          training/tradeoff.py and holdreplay.py)  NNCHECK=1 (print each scan's single closest gallery reference)
+//          MERGED=1 READER=<merged model.json>: one model reads the squared-up close-up AND says which side is up; its
+//          answer (not the rotation cache) also straightens the chocoprint's zoom, exactly as the phone would
 const { fs, path, tf, ROOT, IDS, mk, toTensor } = require("./lib/common.js");
 const { view } = require("./lib/view.js");
 const { readerCrop, zoomView } = require("./lib/crops.js");
 const { loadData } = require("./lib/data.js");
 const { combine, printScores } = require("./lib/evaluate.js");
+const { S } = require("./lib/common.js");
+const { edgeAngle } = require("./align_lib.js");
+const MERGED = process.env.MERGED === "1";
 
 const hold = process.env.HOLD_TEST ? process.env.HOLD_TEST.split(",").filter(Boolean) : undefined;
 const { test, heldScans } = loadData({ synth: false, tests: false, hold });
@@ -21,11 +26,15 @@ const { test, heldScans } = loadData({ synth: false, tests: false, hold });
   const items = process.env.EVAL_SET === "rec" ? test.filter(a => a.cls !== "none" && Array.isArray(a.box)) : heldScans;
   for (const a of items) a.rot = cache[a.file + "|" + a.box];
   const norm = t => t.div(tf.norm(t, 2, -1, true).add(1e-9));
-  const rows = [];
+  const rows = [], qstat = { n: 0, same: 0 };
   for (let i = 0; i < items.length; i += 16) {
     const b = items.slice(i, i + 16);
-    const x1 = toTensor(await Promise.all(b.map(a => { const [cx, cy, s] = readerCrop(a, false); return view(a.file, cx, cy, s); })));
-    const p = reader.predict(x1); const [I, SH, MK] = p.map(t => t.arraySync()); tf.dispose([x1, ...p]);
+    let es = b.map(() => 0);
+    if (MERGED) es = await Promise.all(b.map(async a => { const [cx, cy, s] = readerCrop(a, false); return edgeAngle(new Uint8Array(await view(a.file, cx, cy, s)), S).angle; }));
+    const x1 = toTensor(await Promise.all(b.map((a, j) => { const [cx, cy, s] = readerCrop(a, false); return view(a.file, cx, cy, s, MERGED ? { angle: -es[j] } : {}); })));
+    const p = reader.predict(x1); const [I, SH, MK, Q] = p.map(t => t.arraySync()); tf.dispose([x1, ...p]);
+    if (MERGED) b.forEach((a, j) => { const r = -es[j] + 90 * Q[j].indexOf(Math.max(...Q[j])), d = (((r - a.rot) % 360) + 540) % 360 - 180;
+      qstat.n++; if (Math.abs(d) < 20) qstat.same++; a.rot = r; });
     const x2 = toTensor(await Promise.all(b.map(a => zoomView(a, false, { gray })))); const e = norm(pm.predict(x2)); const E = e.arraySync(); tf.dispose([x2, e]);
     b.forEach((a, j) => {
       const m4 = combine(I[j], SH[j], MK[j]);
@@ -40,6 +49,7 @@ const { test, heldScans } = loadData({ synth: false, tests: false, hold });
     const t = rows.map(r => ({ ...top(f(r)), truth: r.truth }));
     console.log(name, JSON.stringify({ right: `${t.filter(x => x.k === x.truth).length}/${t.length}`, mistakes: t.filter(x => x.k !== x.truth).map(x => x.truth + "→" + x.k).join(" ") }));
   }
+  if (MERGED) console.log("which side up: same as model 6's two-step answer on", `${qstat.same}/${qstat.n}`);
   const agree = rows.map(r => ({ a: top(r.m4), b: top(r.pp), truth: r.truth })).filter(x => x.a.k === x.b.k || (mk(x.a.k) === "z" && mk(x.b.k) === "z"));
   console.log("agreement rule:", JSON.stringify({ answers: `${agree.length}/${rows.length}`, wrong: agree.filter(x => x.a.k !== x.truth).length }));
   if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify({ ids: IDS, rows: rows.map(r => ({ truth: r.truth, m4: r.m4, pp: r.pp })) }));
