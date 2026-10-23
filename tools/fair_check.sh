@@ -16,7 +16,7 @@ GRAY=$(python3 -c "import json;print(1 if json.load(open('$PRINT/gallery.json'))
 OUT=experiments/fair-check-$NAME.txt; mkdir -p experiments /tmp/zfair
 for S in rec held; do
   E=""; [ $S = rec ] && E=rec
-  EVAL_SET=$E DUMP=/tmp/zfair/$NAME-$S.json READER=$READER GRAY=$GRAY HOLD_TEST=$HOLD SYNTH=0 TESTS=0 PRINT=$PRINT \
+  EVAL_SET=$E DUMP=/tmp/zfair/$NAME-$S.json READER=$READER GRAY=$GRAY HOLD_TEST=$HOLD PRINT=$PRINT \
     node training/eval_combo.js > /dev/null 2>&1
 done
 {
@@ -26,4 +26,4 @@ done
   echo; echo "Hold replay (recorded sequences, rule D+):"
   python3 training/holdreplay.py /tmp/zfair/$NAME-rec.json
 } | tee $OUT
-rm -f "$PRINT/combo-report.json"; echo "saved: $OUT"
+echo "saved: $OUT"

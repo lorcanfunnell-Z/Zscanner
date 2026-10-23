@@ -1,0 +1,12 @@
+{
+  "_about": "zScanner training settings, shared by all scripts. Environment variables of the same meaning still override these (READER_PAD, ZOOM).",
+  "readerPad": 1.35,
+  "printZoom": 0.62,
+  "inputSize": 224,
+  "backbone": "app/vendor/mnv2/model.json",
+  "photos": "training-photos",
+  "synth": "training-synth",
+  "tests": "tests",
+  "sessions": "training/sessions.json",
+  "rotationCache": "training/rot-cache.json"
+}

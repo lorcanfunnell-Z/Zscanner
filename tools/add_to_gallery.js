@@ -8,9 +8,9 @@
 // session can only be added once another session has taken its place, so there is always one the scanner has never seen.
 // Each close-up goes through the same steps as the phone: straighten (edge maths) → which side is up → zoom on the number
 // → black and white → chocoprint. Afterwards, run tools/fair_check.sh to confirm nothing got worse.
-const fs = require("fs"), path = require("path"), tf = require("@tensorflow/tfjs-node"), sharp = require("sharp");
+const { fs, path, tf, ROOT, S, IDS, mk, toGray, toTensor } = require("../training/lib/common.js");
+const sharp = require("sharp");
 const { edgeAngle } = require("../training/align_lib.js");
-const ROOT = path.join(__dirname, ".."), S = 224;
 const SRC = path.resolve(process.argv[2] || ""), MODEL = path.resolve(process.argv[3] || path.join(ROOT, "app/model6"));
 const SESS = path.join(ROOT, "training/sessions.json");
 if (!process.argv[2] || !fs.existsSync(path.join(SRC, "closeup"))) { console.log("Give a folder that contains closeup/<chocolate>/*.jpg"); process.exit(1); }
@@ -24,8 +24,7 @@ if (sessions.heldBack.includes(name)) {
   }
   sessions.heldBack = sessions.heldBack.filter(s => s !== name);
 }
-const mk = k => k.startsWith("z") ? "z" : k;
-const VALID = new Set(["zdark", "zmilk", "zwhite", ...Array.from({ length: 25 }, (_, i) => String(i))]);
+const VALID = new Set(IDS);
 
 // turn a 224 close-up clockwise by `deg` about its centre (mirror-padded so the corners stay filled), keep the middle `frac`
 async function turnCrop(buf, deg, frac) {
@@ -34,8 +33,7 @@ async function turnCrop(buf, deg, frac) {
   const side = Math.round(S * frac), left = Math.round((big.info.width - side) / 2), top = Math.round((big.info.height - side) / 2);
   return sharp(big.data, { raw: big.info }).extract({ left, top, width: side, height: side }).resize(S, S).removeAlpha().raw().toBuffer();
 }
-const toGray = b => { const o = Buffer.alloc(b.length); for (let i = 0; i < b.length; i += 3) { const g = Math.round(0.299 * b[i] + 0.587 * b[i + 1] + 0.114 * b[i + 2]); o[i] = o[i + 1] = o[i + 2] = g; } return o; };
-const tensor = bufs => tf.tidy(() => tf.stack(bufs.map(b => tf.tensor3d(new Uint8Array(b), [S, S, 3]))).toFloat().div(127.5).sub(1));
+const tensor = toTensor;
 
 (async () => {
   const quarter = await tf.loadLayersModel("file://" + path.join(MODEL, "quarter/model.json"));
