@@ -1,4 +1,8 @@
 {
-  "heldBack": ["test-3"],
-  "inGallery": []
+  "heldBack": [
+    "test-4"
+  ],
+  "inGallery": [
+    "test-3"
+  ]
 }

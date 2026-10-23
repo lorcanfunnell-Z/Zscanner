@@ -114,5 +114,8 @@
   "sure": 0.99,
   "holdMs": 400,
   "weights": "16-bit (half the download; fair check unchanged)",
-  "version": "6.1"
+  "version": "6.1",
+  "printShare": 0.8,
+  "logic": "shell",
+  "ruleNote": "E (23 Oct 2026): D+ plus chocoprint in >=80% of held frames; logic check on shell only. Chosen on test 4 traces; to be confirmed on test 5."
 }

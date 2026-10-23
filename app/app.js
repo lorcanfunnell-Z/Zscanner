@@ -225,8 +225,14 @@
         // rule "agree-or-99" (model 6, Lorcan's choice D+): both agree, or the combined score is at least 99% sure
         const agreed = !META.rule ? true : META.rule === "agree" ? bothAgree : bothAgree || topP >= (META.sure ?? 0.99);
         if (DEBUG && META.rule) $("#hint").textContent += ` | agree ${agreed ? "yes" : "no"} (${vote(h => h.m4top)} / ${vote(h => h.pmark)})`;
-        if (agreed && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)
-            && (C[topKey]?.custom ? true : META.shellOf[topKey] === shellVote && META.markOf[topKey] === markVote)) { answer(topKey); return; }
+        // rule E (model 6, after test 4): the chocoprint must name this chocolate in at least META.printShare of the held frames
+        // (stops lookalikes like 20/21 flipping through), and the logic check uses the shell colour only (META.logic "shell"):
+        // the reader's digit-count vote kept a correctly read Z dark waiting 21 s in test 4.
+        const printShare = held.filter(h => h.pmark === zm(topKey)).length / held.length;
+        const printOk = !META.printShare || printShare >= META.printShare;
+        const logicOk = C[topKey]?.custom ? true : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
+        if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
+        if (agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) { answer(topKey); return; }
       } else {
         showMark(null);
         if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again
