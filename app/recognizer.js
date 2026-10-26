@@ -9,7 +9,7 @@
 //    which side is the top. If it isn't sure, the reader tries the two likeliest ways up and keeps the clearer reading.
 // The admin page runs the newest candidate model; the client page keeps the proven one until a fair test says otherwise.
 window.Recognizer = (() => {
-  const DIR = window.ZADMIN ? "model6" : "model4";   // admin tries the candidate; clients keep the proven model
+  const DIR = "model6";   // model 6.1 + rules E and A on both pages since 26 Oct 2026 (model4/ kept as a fallback)
   let finder = null, reader = null, quarter = null, printer = null, gallery = null, meta = null, loading = null;
   const S = 224;
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = S;

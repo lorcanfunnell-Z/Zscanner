@@ -8,8 +8,8 @@ sales, placement until March 2027) with Claude. This guide is for whoever looks 
 
 | Page | Address | Who | Model |
 | --- | --- | --- | --- |
-| Client page | `…/Zscanner/app/` | Gift recipients | model 4 (proven) |
-| Admin page | `…/Zscanner/admin.html` (passcode) | zChocolat staff only | model 6.1 (candidate) + all testing tools |
+| Client page | `…/Zscanner/app/` | Gift recipients | model 6.1 + rules E and A (since 26 Oct 2026) |
+| Admin page | `…/Zscanner/admin.html` (passcode) | zChocolat staff only | the same model + all testing tools |
 
 The site is hosted free on **GitHub Pages** from the repository `lorcanfunnell-Z/Zscanner`. Pushing to it (GitHub
 Desktop → Commit → Push) updates the live site within about a minute.
@@ -34,7 +34,7 @@ Never put anything confidential on the admin page.
 6. **Decision** over 0.4 s (at least 3 frames): answer only if the reader and the chocoprint agree, or it is ≥ 99%
    sure; otherwise "I don't know" + a hint. The number tray is always there as a one-tap fallback.
 
-Model 4 (client page) uses steps 1–3 only. Each model is a folder in `app/` (`model4`, `model6`) with its `meta.json`.
+Both pages use `app/model6` (its `meta.json` holds the answering rules). `app/model4` is the older model (steps 1–3 only), kept as a fallback: to go back, set `DIR` in `recognizer.js` and the meta path in `app.js` to `model4`.
 
 ## 3. Folders
 

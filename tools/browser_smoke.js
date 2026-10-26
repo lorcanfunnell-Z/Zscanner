@@ -24,7 +24,7 @@ const { chromium } = require("playwright");
   ok(await a.evaluate(() => Recognizer.model) === "model6", "admin page runs model 6");
   ok(/N°18/.test(ar["18"]) && /N°21/.test(ar["21"]), `admin photo upload: ${ar["18"]} / ${ar["21"]}`);
   const c = await ctx.newPage(), cr = await run(c, "http://localhost:8767/index.html", false);
-  ok(await c.evaluate(() => Recognizer.model) === "model4", "client page runs model 4");
+  ok(await c.evaluate(() => Recognizer.model) === "model6", "client page runs model 6");
   ok(!(await c.$(".adminbar")) && !(await c.$("section.tl")) && (await c.$$(".hk, .hk-heart, .hk-tasting")).length === 0, "client page: no admin tools, no hooks");
   ok(/Found|certain/.test(cr["21"]), `client photo upload responds: ${cr["21"]}`);
   ok(errs.length === 0, `no page errors${errs.length ? ": " + errs.join("; ") : ""}`);

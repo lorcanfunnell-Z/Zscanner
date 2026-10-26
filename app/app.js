@@ -26,7 +26,7 @@
 
   const $ = s => document.querySelector(s);
   let META = { shellOf: {}, markOf: {} };
-  fetch((window.ZADMIN ? "model6" : "model4") + "/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
+  fetch("model6/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function utm(url, content) {
@@ -92,8 +92,8 @@
   async function ensureModel() {
     if (Recognizer.ready) return true;
     setStatus(`<span class="dot"></span><span>Preparing the scanner…</span>`);
-    // admin (for now): show how far along it is, so the wait never looks frozen
-    const prog = window.ZADMIN ? p => { if (!Recognizer.ready) setStatus(`<span class="dot"></span><span>Preparing the scanner… ${Math.round(p * 100)}%</span>`); } : null;
+    // show how far along it is, so the wait never looks frozen (first visit downloads ~7 MB)
+    const prog = p => { if (!Recognizer.ready) setStatus(`<span class="dot"></span><span>Preparing the scanner… ${Math.round(p * 100)}%</span>`); };
     try { await Recognizer.load(prog); setStatus(""); return true; }
     catch (e) { console.error(e); setStatus("The scanner could not start. Please choose your number below.", "err"); return false; }
   }
@@ -297,5 +297,4 @@
 })();
 
 // Speed: start loading the scanner as soon as the page has opened, so it's ready by the time Scan is pressed
-// (admin page for now; clients get it when the candidate model moves to the client page)
-if (window.ZADMIN === true) window.addEventListener("load", () => setTimeout(() => window.Recognizer && Recognizer.load().catch(() => {}), 400));
+if (window.Recognizer) window.addEventListener("load", () => setTimeout(() => window.Recognizer && Recognizer.load().catch(() => {}), 400));
