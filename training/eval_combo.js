@@ -9,7 +9,7 @@
 const { fs, path, tf, ROOT, IDS, mk, toTensor } = require("./lib/common.js");
 const { view } = require("./lib/view.js");
 const { readerCrop, zoomView } = require("./lib/crops.js");
-const { loadData } = require("./lib/data.js");
+const { loadData, attachRotations } = require("./lib/data.js");
 const { combine, printScores } = require("./lib/evaluate.js");
 const { S } = require("./lib/common.js");
 const { edgeAngle } = require("./align_lib.js");
@@ -22,9 +22,8 @@ const { test, heldScans } = loadData({ synth: false, tests: false, hold });
   const PR = path.resolve(process.env.PRINT), reader = await tf.loadLayersModel("file://" + path.resolve(process.env.READER || path.join(ROOT, "app/model4/reader/model.json")));
   const pm = await tf.loadLayersModel("file://" + path.join(PR, "print", "model.json")), gal = JSON.parse(fs.readFileSync(path.join(PR, "gallery.json")));
   const gray = process.env.GRAY ? process.env.GRAY === "1" : !!gal.gray;
-  const cache = JSON.parse(fs.readFileSync(path.join(ROOT, "training", "rot-cache.json")));
   const items = process.env.EVAL_SET === "rec" ? test.filter(a => a.cls !== "none" && Array.isArray(a.box)) : heldScans;
-  for (const a of items) a.rot = cache[a.file + "|" + a.box];
+  await attachRotations(items);   // which way up, as the phone works it out (cached; fills in any new photos, e.g. a new test session)
   const norm = t => t.div(tf.norm(t, 2, -1, true).add(1e-9));
   const rows = [], qstat = { n: 0, same: 0 };
   for (let i = 0; i < items.length; i += 16) {

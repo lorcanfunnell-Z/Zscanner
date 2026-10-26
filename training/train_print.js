@@ -5,6 +5,7 @@
 // Defaults = the model 6.1 recipe: ArcFace, black and white, lookalike pairs + mining, tougher lighting, generated images
 // and the non-held test scans. So:   OUT=/path/to/new-model node training/train_print.js
 // Switches (all optional): LOSS=triplet  GRAY=0  HARDPAIRS=0  HARSHAUG=0  SYNTH=0  TESTS=0  EPOCHS_R=12  STEPS=120
+//                          TILT=0.5 (share of pictures seen from a tilted camera, added after test 4; default 0 = 6.1 recipe)
 //                          HOLD_TEST=test-3 (default: training/sessions.json)  RESUME=1 (carry on after a restart)
 const { fs, path, tf, ROOT, ZOOM, MKS, mk, rnd, shuffle, toTensor } = require("./lib/common.js");
 const { zoomView } = require("./lib/crops.js");
@@ -15,7 +16,7 @@ const OUT = path.resolve(process.env.OUT || path.join(ROOT, "experiments", "prin
 const EPOCHS_R = +(process.env.EPOCHS_R || 12), STEPS = +(process.env.STEPS || 120), EMB = 128;
 const LOSS = process.env.LOSS || "arcface", GRAY = flag("GRAY", true), HARSHAUG = flag("HARSHAUG", true);
 if (process.env.HARDPAIRS === undefined) process.env.HARDPAIRS = "1";
-const ZV = { gray: GRAY, harsh: HARSHAUG };
+const ZV = { gray: GRAY, harsh: HARSHAUG, tilt: +(process.env.TILT || 0) };
 const hold = process.env.HOLD_TEST ? process.env.HOLD_TEST.split(",").filter(Boolean) : undefined;
 const { train, test, testScans, heldScans, hold: HOLD } = loadData({ synth: flag("SYNTH", true), tests: flag("TESTS", true), hold });
 // lookalike groups (always mixed in) — the confusion-map pairs come from training/hard-pairs.json

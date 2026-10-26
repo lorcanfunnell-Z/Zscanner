@@ -6,13 +6,17 @@ const sharp = require("sharp");
 // rotate it, adjust light, and return 224x224 RGB bytes.
 async function view(file, cx, cy, side, { angle = 0, light = 1, sat = 1, hue = 0, blur = 0, jpeg = 0, ...fx } = {}) {
   const meta = await sharp(file).metadata(), W = meta.width, H = meta.height, pad = Math.round(Math.max(W, H) * 0.8);
-  const grow = angle ? 1.42 : 1;                       // take a bigger square first so rotating leaves no empty corners
+  const grow = angle || fx.tilt ? 1.42 : 1;                       // take a bigger square first so rotating leaves no empty corners
   const ps = Math.max(8, Math.round(side * W * grow));
   const big = await sharp(file).extend({ top: pad, bottom: pad, left: pad, right: pad, extendWith: "mirror" }).raw().toBuffer({ resolveWithObject: true });
   let px = Math.round(cx * W - ps / 2) + pad, py = Math.round(cy * H - ps / 2) + pad;
   px = Math.max(0, Math.min(px, big.info.width - ps)); py = Math.max(0, Math.min(py, big.info.height - ps));
   const R = Math.round(S * grow);
   let out = await sharp(big.data, { raw: big.info }).extract({ left: px, top: py, width: ps, height: ps }).resize(R, R).raw().toBuffer({ resolveWithObject: true });
+  if (fx.tilt) {                                        // camera tilted: the chocolate looks squashed along one direction
+    const t = await sharp(out.data, { raw: out.info }).affine(fx.tilt, { background: "#808080" }).raw().toBuffer({ resolveWithObject: true });
+    out = await sharp(t.data, { raw: t.info }).extract({ left: Math.floor((t.info.width - R) / 2), top: Math.floor((t.info.height - R) / 2), width: R, height: R }).raw().toBuffer({ resolveWithObject: true });
+  }
   if (angle) {
     const rot = await sharp(out.data, { raw: out.info }).rotate(angle, { background: "#808080" }).raw().toBuffer({ resolveWithObject: true });
     out = await sharp(rot.data, { raw: rot.info }).extract({ left: Math.floor((rot.info.width - S) / 2), top: Math.floor((rot.info.height - S) / 2), width: S, height: S }).raw().toBuffer({ resolveWithObject: true });
@@ -47,4 +51,11 @@ const jitter = hard => {
   return j;
 };
 
-module.exports = { view, jitter };
+// A camera tilt of up to ~45°: squash along a random direction by c (0.7-1), done as a stretch of the other direction
+// by 1/c so nothing shrinks (the crop is then cut back to size). Returns sharp's 2x2 affine matrix.
+function tiltMatrix() {
+  const f = between(0, Math.PI), c = between(.7, 1), k = 1 / c, co = Math.cos(f), si = Math.sin(f);
+  // R(f) · diag(1, k) · R(-f)
+  return [co * co + k * si * si, co * si * (1 - k), co * si * (1 - k), si * si + k * co * co];
+}
+module.exports = { view, jitter, tiltMatrix };

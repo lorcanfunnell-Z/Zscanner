@@ -9,8 +9,8 @@ X-rec.json: 327 photos/scans
 
 X-held.json: 29 photos/scans
   model 4 alone, 65% sure      answers  20.7%   wrong   0 (0.0 per 100 answers)
-  combined, 80% sure           answers  89.7%   wrong   2 (7.7 per 100 answers)
-  combined, 95% sure           answers  86.2%   wrong   2 (8.0 per 100 answers)
+  combined, 80% sure           answers  93.1%   wrong   3 (11.1 per 100 answers)
+  combined, 95% sure           answers  89.7%   wrong   2 (7.7 per 100 answers)
   D: both agree                answers  62.1%   wrong   1 (5.6 per 100 answers)
   D, or combined 99% sure      answers  93.1%   wrong   3 (11.1 per 100 answers)
   D, or combined 95% sure      answers  93.1%   wrong   3 (11.1 per 100 answers)
