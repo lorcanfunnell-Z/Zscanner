@@ -9,7 +9,17 @@ L = [r for r in json.load(open(sys.argv[1] + "/test-log.json")) if r.get("truth"
 META = json.load(open("app/model6/meta.json"))
 zm = lambda k: "z" if k and k.startswith("z") else k
 
-def run(rule, K=3):
+def jsvote(keys):
+    c = {}
+    for k in keys:
+        if k: c[k] = c.get(k, 0) + 1
+    order = sorted((k for k in c if k.isdigit()), key=int) + [k for k in c if not k.isdigit()]
+    return sorted(order, key=lambda k: -c[k])[0] if order else None
+
+def adiff(a, b):                                        # smallest gap between two angles, in degrees
+    d = abs((a - b) % 360); return min(d, 360 - d)
+
+def run(rule, K=3, detail=False):
     out = []
     for r in L:
         held, said, at = [], None, None
@@ -22,22 +32,46 @@ def run(rule, K=3):
                 for k, p in h["top"]: avg[k] += p / len(win)
             (top, tp), *rest = avg.most_common(2) + [("", 0)]
             sp = rest[0][1]
-            vote = lambda key: Counter(h[key] for h in win if h.get(key)).most_common(1)[0][0] if any(h.get(key) for h in win) else None
+            vote = lambda key: jsvote([h.get(key) for h in win])
             agree = zm(vote("m4top")) == zm(top) and vote("pmark") == zm(top)
             ok = agree or (rule.get("or99") and tp >= .99)
             if rule.get("stable"):                              # each of the last K frames, on its own, names the same chocolate
                 ok = ok and all(h["top"][0][0] == top for h in held[-K:])
             if rule.get("printshare"):                          # the chocoprint named it in at least this share of frames
                 ok = ok and sum(1 for h in win if h.get("pmark") == zm(top)) / len(win) >= rule["printshare"]
+            if rule.get("scanmajority"):                        # idea A: don't answer against what most of the whole scan said
+                ok = ok and jsvote([h["top"][0][0] for h in held]) == top
+            if rule.get("printmajority"):                       # idea A2: same, using the chocoprint's per-frame answer
+                ok = ok and jsvote([h.get("pmark") for h in held]) == zm(top)
+            if rule.get("anglesteady"):                         # idea B1: the held frames' side-up angles agree with each other
+                rs = [h["rot"] for h in win if h.get("rot") is not None]
+                ok = ok and all(adiff(a, b) <= rule["anglesteady"] for a in rs for b in rs)
+            if rule.get("anglemain"):                           # idea B2: the held frames match the angle the scan mostly had
+                rs = [h["rot"] for h in held if h.get("rot") is not None]
+                if rs:
+                    main = jsvote([str(int(((a + 22.5) % 360) // 45)) for a in rs])
+                    ok = ok and all(adiff(h["rot"], int(main) * 45) <= rule["anglemain"] for h in win if h.get("rot") is not None)
             if rule.get("logic", "full") != "none":            # the phone's logic check: shell (and mark) votes must fit
                 ok = ok and vote("shell") == META["shellOf"].get(top)
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
             if ok and tp >= .5 and tp - sp >= .2: said = top; at = f["t"] - held[0]["t"]; break
         out.append((r["truth"], said, at if said else None))
+    if detail: return out
     ans = [o for o in out if o[1]]; wrong = [o for o in ans if o[1] != o[0]]
     ts = sorted(o[2] for o in ans); med = ts[len(ts) // 2] / 1000 if ts else 0
     slow = " ".join(f"{o[0]}:{o[2]/1000:.1f}s" for o in ans if o[2] > 3000)
     return f"answered {len(ans)}/{len(out)}, wrong {len(wrong)} {' '.join(t + '→' + s for t, s, _ in wrong)} | typical {med:.1f}s after first seen | slow: {slow}"
+
+if len(sys.argv) > 2 and sys.argv[2] == "new":
+    E = {"or99": 1, "printshare": .8, "logic": "shell"}
+    for name, rule in [("E (current admin rule)", E),
+                       ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
+                       ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
+                       ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
+                       ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
+                       ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45})]:
+        print(f"{name:45s} {run(rule)}")
+    sys.exit()
 
 for name, rule, K in [("D+ and chocoprint 80%, shell check only", {"or99": 1, "printshare": .8, "logic": "shell"}, 3),
                       ("D+, shell check only", {"or99": 1, "logic": "shell"}, 3),("D+ (current: agree, or 99% sure)", {"or99": 1}, 3), ("D (agree only)", {}, 3),

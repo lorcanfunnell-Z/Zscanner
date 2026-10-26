@@ -124,7 +124,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = [];
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; scanTops = {};
     loop();
   }
 
@@ -141,6 +141,7 @@
   const DEBUG = window.ZADMIN === true;   // live numbers + test log only on the admin page
   let held = [], holdStart = 0;            // frames collected during the current hold
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
+  let scanTops = {};                          // rule A: how often each chocolate topped a frame since this scan began
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
   function frameShot() {   // what the camera saw (centre square), small, for the test log
@@ -191,6 +192,7 @@
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
           p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark });
+        if (r.ranked[0]) scanTops[r.ranked[0].key] = (scanTops[r.ranked[0].key] || 0) + 1;
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
@@ -232,7 +234,13 @@
         const printOk = !META.printShare || printShare >= META.printShare;
         const logicOk = C[topKey]?.custom ? true : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
-        if (agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) { answer(topKey); return; }
+        // rule A (model 6, after test 5): don't answer against what most of the whole scan said. The answer must be the
+        // chocolate that topped the most frames since this scan began, not just the last 0.6 s (stops a late misreading,
+        // e.g. test 5's N°20 read as 24 once the which-side-up step turned it sideways).
+        const scanTop = Object.entries(scanTops).sort((a, b) => b[1] - a[1])[0]?.[0];
+        const scanOk = !META.scanMajority || scanTop === topKey;
+        if (DEBUG && META.scanMajority) $("#hint").textContent += ` | scan ${scanTop}`;
+        if (agreed && printOk && scanOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) { answer(topKey); return; }
       } else {
         showMark(null);
         if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again

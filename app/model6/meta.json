@@ -117,5 +117,6 @@
   "version": "6.1",
   "printShare": 0.8,
   "logic": "shell",
-  "ruleNote": "E (23 Oct 2026): D+ plus chocoprint in >=80% of held frames; logic check on shell only. Chosen on test 4 traces; to be confirmed on test 5."
+  "ruleNote": "E + A (26 Oct 2026): D+ plus chocoprint in >=80% of held frames; logic check on shell only; and the answer must be the chocolate that topped the most frames since the scan began (A, after test 5's 20 -> 24). A chosen on test 5 traces; to be confirmed on test 6.",
+  "scanMajority": true
 }
