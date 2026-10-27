@@ -6,7 +6,9 @@
 //    its shell and its mark all agree. A dark two-digit chocolate can only be 10, 13, 15, 17, 18, 19, 21 or 23.
 // 4. ALIGN (Stage 2, model5 onwards): like face alignment, the close-up is straightened before reading. The chocolate is
 //    square, so its edges give the angle modulo 90 degrees (plain maths, edgeAngle); a small QUARTER model then says
-//    which side is the top. If it isn't sure, the reader tries the two likeliest ways up and keeps the clearer reading.
+//    which side is the top. If it isn't sure: with straightened reading (meta.align) the reader tries both likely ways
+//    up and keeps the clearer reading; otherwise (model 6: the reader doesn't need straightening) the chocoprint tries
+//    both instead and keeps whichever matches a real reference more clearly — a wrongly-turned crop won't match any.
 // The admin page runs the newest candidate model; the client page keeps the proven one until a fair test says otherwise.
 window.Recognizer = (() => {
   const DIR = "model6";   // model 6.1 + rules E and A on both pages since 26 Oct 2026 (model4/ kept as a fallback)
@@ -111,6 +113,24 @@ window.Recognizer = (() => {
     return meta.ids.map((k, i) => ({ key: k, p: r[i] / sum })).sort((a, b) => b.p - a.p);
   }
 
+  // Stage 3: chocoprint of the straightened, zoomed-in number at a given rotation, compared with the gallery
+  // (mean of the 3 closest per mark). Shared by the normal flow and by the "which rotation is right?" check below.
+  function computePrint(source, x, y, side, rot) {
+    const z = side * gallery.zoom, zc = grab(source, x + side / 2 - z / 2, y + side / 2 - z / 2, z, rot);
+    const v = tf.tidy(() => {
+      // black-and-white (shape only) when the chocoprint model was trained that way
+      const inp = gallery.gray ? zc.mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(2, true).tile([1, 1, 3]) : zc;
+      const e = printer.predict(inp.expandDims(0)); return e.div(tf.norm(e, 2, -1, true).add(1e-9));
+    }).dataSync(); zc.dispose();
+    const sims = {};
+    for (const [m, refs] of Object.entries(gallery.byMark)) {
+      const ss = refs.map(r => { let d = 0; for (let k = 0; k < r.length; k++) d += r[k] * v[k]; return d; }).sort((a, b) => b - a);
+      sims[m] = (ss[0] + (ss[1] ?? ss[0]) + (ss[2] ?? ss[0])) / 3;
+    }
+    const order = Object.entries(sims).sort((a, b) => b[1] - a[1]);
+    return { sims, v, sim: order[0][1] };
+  }
+
   // Look at one square of the source. Returns { found, obj, box: {cx, cy, size} (0..1 of the square), ranked }
   // stopwatch per step of the latest scan (ms), for the admin speed test; dataSync() waits for the phone's GPU, so these are real
   let times = {}, tl = 0; const lap = k => { const n = performance.now(); times[k] = (times[k] || 0) + n - tl; tl = n; };
@@ -138,20 +158,29 @@ window.Recognizer = (() => {
     grab(source, x, y, side).dispose();
     snapCtx.drawImage(canvas, 0, 0);   // keep the standard close-up (whole chocolate, as seen) for the test log and gallery
     const sharp = sharpness(), lit = light(); lap("crop + sharpness");
-    let pid, psh, pmk, rot = 0, qsure = 1;
+    let pid, psh, pmk, rot = 0, qsure = 1, resolvedPrint = null;
     if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
     else if (!meta.align) {                                    // reader reads as it is; straightening is only for the chocoprint
       [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
       const e = reuse && prev.e != null ? prev.e : edgeAngle(); lap("straighten (edges)");   // same box as last frame → same angle
       const de = prev ? Math.abs(((e - prev.e) % 90 + 135) % 90 - 45) : 99;   // change in angle since last frame (mod 90)
-      let q;
-      if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8) { q = prev.q; qsure = prev.qsure; }   // same way up as a moment ago
+      let qorder;
+      if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8) { qorder = [prev.q]; qsure = prev.qsure; }   // same way up as a moment ago
       else {
         const sqd = grab(source, x, y, side, -e);
         const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
-        q = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a])[0]; qsure = pq[q];
+        qorder = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a]); qsure = pq[qorder[0]];
       }
-      rot = -e + 90 * q; lap("which side is up");
+      const q = qorder[0]; rot = -e + 90 * q; lap("which side is up");
+      // unsure which way is up: don't hand the chocoprint (80% of the final decision) a single untested guess.
+      // Try the two likeliest rotations and keep whichever actually looks like a real reference — a wrongly-turned
+      // crop won't match anything, so the chocoprint itself is a better judge of "which way up" than the quarter
+      // model's own confidence here.
+      if (qsure < 0.9 && printer && qorder.length > 1) {
+        const tries = [q, qorder[1]].map(qq => { const r = -e + 90 * qq; return { rot: r, pr: computePrint(source, x, y, side, r) }; });
+        const best = tries.sort((a, b) => b.pr.sim - a.pr.sim)[0];
+        rot = best.rot; resolvedPrint = best.pr; lap("which side is up (chocoprint check)");
+      }
       if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs }, e, q, qsure };
     } else {
       const e = edgeAngle();                                   // 1. square it up
@@ -169,18 +198,7 @@ window.Recognizer = (() => {
     }
     let ranked = combine(pid, psh, pmk), print = null; const m4top = ranked[0].key;
     if (printer) {
-      // Stage 3: chocoprint of the straightened, zoomed-in number, compared with the gallery (mean of the 3 closest per mark)
-      const z = side * gallery.zoom, zc = grab(source, x + side / 2 - z / 2, y + side / 2 - z / 2, z, rot);
-      const v = tf.tidy(() => {
-        // black-and-white (shape only) when the chocoprint model was trained that way
-        const inp = gallery.gray ? zc.mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(2, true).tile([1, 1, 3]) : zc;
-        const e = printer.predict(inp.expandDims(0)); return e.div(tf.norm(e, 2, -1, true).add(1e-9));
-      }).dataSync(); zc.dispose(); lap("chocoprint");
-      const sims = {};
-      for (const [m, refs] of Object.entries(gallery.byMark)) {
-        const ss = refs.map(r => { let d = 0; for (let k = 0; k < r.length; k++) d += r[k] * v[k]; return d; }).sort((a, b) => b - a);
-        sims[m] = (ss[0] + (ss[1] ?? ss[0]) + (ss[2] ?? ss[0])) / 3;
-      }
+      const { sims, v } = resolvedPrint || computePrint(source, x, y, side, rot); lap("chocoprint");
       const mx = Math.max(...Object.values(sims)), ex = {}; let zsum = 0;
       for (const [m, s2] of Object.entries(sims)) { ex[m] = Math.exp(20 * (s2 - mx)); zsum += ex[m]; }
       const pm = k => ex[k.startsWith("z") ? "z" : k] / zsum;
