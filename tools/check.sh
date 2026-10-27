@@ -16,7 +16,7 @@ node training/selftest.js 2>/dev/null | sed -n '/ok\|FAIL\|passed/p' || FAIL=1
 node training/selftest.js >/dev/null 2>&1 || FAIL=1
 say "3. Quality check vs baseline (about a minute)"
 tools/fair_check.sh check app/model6/reader/model.json app/model6 >/dev/null 2>&1
-NOW=$(sed -n '3,$p' experiments/fair-check-check.txt | sed 's/check-\(rec\|held\)/X-\1/')
+NOW=$(sed -n '3,$p' experiments/fair-check-check.txt | sed -E 's/check-(rec|held)/X-\1/')
 if [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ]; then echo "$NOW" > training/baseline-model6.txt; echo "  baseline updated"; 
 elif [ ! -f training/baseline-model6.txt ]; then echo "$NOW" > training/baseline-model6.txt; echo "  baseline saved (first run)";
 elif diff <(echo "$NOW") training/baseline-model6.txt >/dev/null; then echo "  ok    identical to baseline"; 

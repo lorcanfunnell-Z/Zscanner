@@ -74,7 +74,11 @@ The rule: **every change is measured on data it has never seen, and kept only if
 
 ## 6. Retraining (only if needed)
 
-Install once: Node.js, then `npm install` in this folder. Defaults reproduce the current recipes:
+Install once: Node.js **20** (the training library, `@tensorflow/tfjs-node`, doesn't run on newer Node — it crashes
+on the first real computation because Node removed something it still calls internally). If your Mac's Node is newer,
+download Node 20 from nodejs.org, unzip it somewhere like `~/.local/node20`, and run training/checking commands with
+`PATH="$HOME/.local/node20/bin:$PATH"` in front of them (e.g. `PATH="$HOME/.local/node20/bin:$PATH" tools/check.sh`).
+Then `npm install` in this folder. Defaults reproduce the current recipes:
 
 | Model | Command | Notes |
 | --- | --- | --- |
