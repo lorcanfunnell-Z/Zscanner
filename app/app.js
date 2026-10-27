@@ -42,8 +42,13 @@
   const label = k => C[k].z || C[k].custom ? (C[k].custom && C[k].no ? "N°" + C[k].no + " " : "") + C[k].name : "N°" + k + " " + C[k].name;
 
   // ---------- Result card ----------
+  // an automatic answer's chocoprint, kept just long enough to reinforce it if the person corrects it via one of the
+  // two existing "that's not right" paths below (Z shell colour, or the number grid) — not a new UI, just teaching
+  // the existing correction paths to feed the gallery, the same way a confirmed-right answer already does
+  let pendingFixVec = null;
   function render(key, opts = {}) {
     const c = C[key]; if (!c) return;
+    if (opts.scanned) pendingFixVec = null;   // a fresh automatic answer supersedes any earlier pending correction
     const title = c.z || (c.custom && !c.no)
       ? esc(c.name)
       : c.custom ? `<span class="n"><span class="no">N°</span>${esc(c.no)}</span>${esc(c.name)}`
@@ -70,8 +75,12 @@
         </div>
         ${opts.scanned ? `<p class="wrong">Not the right chocolate? <button type="button" id="fixBtn">Choose the number instead</button></p>` : ""}
       </article>`;
-    document.querySelectorAll(".zbtn").forEach(b => b.onclick = () => render("z" + b.dataset.z, { ...opts, keepScroll: true }));
-    const fix = $("#fixBtn"); if (fix) fix.onclick = () => $("#grid").scrollIntoView({ behavior: "smooth", block: "center" });
+    document.querySelectorAll(".zbtn").forEach(b => b.onclick = () => {
+      const corrected = "z" + b.dataset.z;
+      if (!DEBUG && opts.scanned && opts.vec && corrected !== key) Recognizer.reinforce(corrected, opts.vec);
+      render(corrected, { ...opts, keepScroll: true });
+    });
+    const fix = $("#fixBtn"); if (fix) fix.onclick = () => { if (opts.scanned && opts.vec) pendingFixVec = opts.vec; $("#grid").scrollIntoView({ behavior: "smooth", block: "center" }); };
     document.querySelectorAll(".key").forEach(k => k.setAttribute("aria-current", String(k.dataset.k === key || (k.dataset.k === "z" && !!c.z))));
     if (!opts.example && !opts.keepScroll) $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
     // for hooks.js (welcome offer, tasting list, corporate counting); repeat = the same result redrawn (e.g. Z colour change)
@@ -85,7 +94,11 @@
   grid.onclick = e => {
     const k = e.target.closest(".key"); if (!k) return;
     setStatus(""); $("#suggest").hidden = true;
-    render(k.dataset.k === "z" ? "zdark" : k.dataset.k);
+    const key = k.dataset.k === "z" ? "zdark" : k.dataset.k;
+    // a pick right after "Choose the number instead" is an explicit correction of that automatic answer
+    if (!DEBUG && pendingFixVec) Recognizer.reinforce(key, pendingFixVec);
+    pendingFixVec = null;
+    render(key);
   };
 
   // ---------- Model ----------
@@ -124,7 +137,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; scanTops = {};
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; scanTops = {}; pendingFixVec = null;
     loop();
   }
 
@@ -163,10 +176,10 @@
     mark.style.setProperty("--progress", Math.min(1, progress));
     mark.hidden = false; mark.dataset.label = "";
   }
-  function answer(key) {
+  function answer(key, vec) {
     report("answer", key);
     viewer.classList.add("locked");
-    setTimeout(() => { stopCamera(); render(key, { scanned: true }); setStatus(`Found: ${esc(label(key))}`); }, 250);
+    setTimeout(() => { stopCamera(); render(key, { scanned: true, vec }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
   function resetHold(t) { held = []; holdStart = t; }
 
@@ -256,7 +269,7 @@
           // gallery for the rest of this visit, so a second pass over the same box gets easier. Not during admin
           // test sessions (DEBUG) — later test scans must stand on their own, not benefit from earlier ones.
           if (!DEBUG && bothAgree && topP >= (META.sure ?? 0.99) && r.print?.vec) Recognizer.reinforce(topKey, r.print.vec);
-          answer(topKey); return;
+          answer(topKey, r.print?.vec); return;
         }
       } else {
         showMark(null);
@@ -286,11 +299,12 @@
       }
       // model 6: the same rule as live scanning (both opinions agree, or 99% sure); otherwise offer the likeliest choices
       const zk = k => k && k.startsWith("z") ? "z" : k;
-      const photoSure = META.rule === "agree-or-99"
-        ? (zk(res.m4top) === zk(best[0].key) && res.print?.mark === zk(best[0].key)) || best[0].p >= (META.sure ?? 0.99)
-        : best[0].p >= PHOTO_SURE;
+      const bothAgreePhoto = zk(res.m4top) === zk(best[0].key) && res.print?.mark === zk(best[0].key);
+      const photoSure = META.rule === "agree-or-99" ? bothAgreePhoto || best[0].p >= (META.sure ?? 0.99) : best[0].p >= PHOTO_SURE;
       if (photoSure) {
-        render(best[0].key, { scanned: true });
+        // same highest-confidence reinforcement as live scanning, for the same reason
+        if (!DEBUG && bothAgreePhoto && best[0].p >= (META.sure ?? 0.99) && res.print?.vec) Recognizer.reinforce(best[0].key, res.print.vec);
+        render(best[0].key, { scanned: true, vec: res.print?.vec });
         setStatus(`<img class="thumb" src="${url}" alt=""><span>Found: ${esc(label(best[0].key))}</span>`);
         $("#suggest").hidden = true;
       } else {
