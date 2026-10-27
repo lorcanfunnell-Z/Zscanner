@@ -84,7 +84,7 @@
   window.addEventListener("zscan", async e => {
     const d = e.detail;
     const entry = { n: ++n, at: new Date().toISOString(), note: getNote(), type: d.type, guess: d.guess, avgTop3: d.avgTop3, nowTop3: d.nowTop3,
-      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, trace: d.trace || [],
+      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, trace: d.trace || [], rejected: d.rejected || [],
       crop: d.crop, frame: d.frame, truth: null, correct: null };
     await put(entry);
     show(entry);
@@ -101,7 +101,8 @@
       <tr><td>Mark seen</td><td>${{ one: "one digit", two: "two digits", z: "z" }[e.mark] || e.mark}</td></tr>
       <tr><td>Frames averaged</td><td>${e.frames} over ${(e.holdMs / 1000).toFixed(1)}s</td></tr>
       <tr><td>Time to answer</td><td>${(e.ms / 1000).toFixed(1)}s${e.seenMs != null ? ` (${(e.seenMs / 1000).toFixed(1)}s after the chocolate was first seen)` : ""}</td></tr>
-      <tr><td>Frames recorded</td><td>${(e.trace || []).length}</td></tr></table>`;
+      <tr><td>Frames recorded</td><td>${(e.trace || []).length}</td></tr>
+      <tr><td>Frames rejected</td><td>${(e.rejected || []).length ? (e.rejected || []).length + " (" + Object.entries((e.rejected || []).reduce((c, f) => (c[f.reason] = (c[f.reason] || 0) + 1, c), {})).map(([k, v]) => `${k} ${v}`).join(", ") + ")" : "0"}</td></tr></table>`;
   }
 
   function show(e) {

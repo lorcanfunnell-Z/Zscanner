@@ -124,7 +124,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; scanTops = {};
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; scanTops = {};
     loop();
   }
 
@@ -143,6 +143,7 @@
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
   let scanTops = {};                          // rule A: how often each chocolate topped a frame since this scan began
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
+  let rejected = [];   // admin only: frames seen but skipped (too small/blurry/dark/glare), so the quality gates can be checked against real misses too
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
   function frameShot() {   // what the camera saw (centre square), small, for the test log
     const c = document.createElement("canvas"); c.width = c.height = 320;
@@ -153,7 +154,7 @@
   function report(type, guess) {
     if (!DEBUG || !lastInfo) return;
     window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart),
-      seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null, trace, crop: Recognizer.snapshot(), frame: frameShot() } }));
+      seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null, trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
@@ -181,8 +182,13 @@
       if (r.found && (tooSmall || blurry || tooDark || glare)) {
         // seen, but not readable: don't count this frame, and say what to do
         lastSeen = t0; showMark(r, 0);
+        const reason = tooSmall ? "tooSmall" : tooDark ? "tooDark" : glare ? "glare" : "blurry";
         $("#hint").textContent = tooSmall ? "Move a little closer" : tooDark ? "Too dark, find more light" : glare ? "Tilt slightly to avoid the reflection" : "Too blurry, hold steady";
-        if (DEBUG) $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}%`;
+        if (DEBUG) {
+          $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}%`;
+          if (rejected.length < 400) rejected.push({ t: Math.round(t0 - scanStart), reason, sharp: Math.round(r.sharp), size: +r.box.size.toFixed(3),
+            light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null });
+        }
       } else if (r.found) {
         lastSeen = t0;
         // restart the countdown if the chocolate jumped (camera still being moved into place)
