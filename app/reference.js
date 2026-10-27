@@ -1,7 +1,10 @@
 // Reference round (admin page only): like Face ID's setup, where you turn your head so it sees you in several ways.
-// Each chocolate is recorded in a few lights (window, lamp, inside the box); the close-ups feed the chocoprint gallery
-// (tools/add_to_gallery.js), so the scanner recognises chocolates better in those conditions, without retraining.
-// These photos are kept apart from test sessions, so tests stay fair. Download the zip and send it to Claude.
+// Each chocolate is recorded in a few lights (window, lamp, inside the box). Two ways to use what's recorded:
+//   - "Use right away": each good frame's chocoprint is kept and merged into custom-chocolates.json (the same file
+//     "Add a chocolate" writes) — live the moment that file is pushed, no retraining, no processing step.
+//   - "Download reference photos": the close-ups themselves, for tools/add_to_gallery.js to fold into the next
+//     trained model properly. Slower, but keeps the fuller picture (JPEGs, not just the chocoprint).
+// These photos are kept apart from test sessions, so tests stay fair.
 (() => {
   if (window.ZADMIN !== true) return;
   const C = window.CHOCOLATES, $ = s => document.querySelector(s);
@@ -52,13 +55,15 @@
     const rows = await allShots(), done = c => new Set(rows.filter(r => r.cond === c).map(r => r.key)).size;
     $("#rfHome").innerHTML = `
       <h3>Each chocolate in a few lights</h3>
-      <p class="muted">Pick a light, then record each chocolate for a few seconds (${PER} close-ups). About 15 minutes per light for all 28. These photos teach the scanner new conditions; they are not a test.</p>
+      <p class="muted">Pick a light, then record each chocolate for a few seconds (${PER} close-ups). About 15 minutes per light for all 28. "Use right away" is live as soon as you push the file it downloads; "Download reference photos" is for folding into the next trained model properly. These photos teach the scanner new conditions; they are not a test.</p>
       ${CONDS.map(c => `<button class="cl-tile wide" type="button" data-c="${c.id}" style="text-align:left;padding:14px 16px;min-height:64px">
         <span style="display:block;font:500 12px var(--sans);letter-spacing:.2em">${c.name}</span>
         <span style="display:block;font:400 13px/1.4 var(--sans);letter-spacing:0;text-transform:none;opacity:.7;margin-top:4px">${c.tip} · ${done(c.id)}/28 done</span></button>`).join("")}
-      <button class="btn btn-light" type="button" id="rfZip" ${rows.length ? "" : "disabled"}>Download reference photos (${rows.length})</button>
+      <button class="btn btn-light" type="button" id="rfFresh" ${rows.some(r => r.vec) ? "" : "disabled"}>Use right away (${rows.filter(r => r.vec).length} chocoprints)</button>
+      <button class="btn btn-outline-light" type="button" id="rfZip" style="color:#fff;border:1px solid rgba(255,255,255,.4)" ${rows.length ? "" : "disabled"}>Download reference photos (${rows.length})</button>
       <button class="tl-link" type="button" id="rfClear" style="color:rgba(255,255,255,.6);background:none;border:0;text-decoration:underline;cursor:pointer;align-self:flex-start">Clear reference photos</button>`;
     $("#rfHome").querySelectorAll("[data-c]").forEach(b => b.onclick = () => { cond = CONDS.find(c => c.id === b.dataset.c); pick(); });
+    $("#rfFresh").onclick = downloadFresh;
     $("#rfZip").onclick = download;
     $("#rfClear").onclick = async e => { if (e.target.dataset.sure) { await clearAll(); home(); } else { e.target.dataset.sure = 1; e.target.textContent = "Tap again to delete all reference photos on this phone"; } };
     show("rfHome");
@@ -85,7 +90,9 @@
       if (!stream) return;
       if (v.readyState >= 2 && performance.now() - last >= GAP_MS) {
         const r = Recognizer.scan(v);
-        if (r.found && r.sharp >= MIN_SHARP && (!r.light || r.light.p90 >= MIN_LIGHT)) { shots.push(Recognizer.snapshot()); last = performance.now(); }
+        if (r.found && r.sharp >= MIN_SHARP && (!r.light || r.light.p90 >= MIN_LIGHT)) {
+          shots.push({ url: Recognizer.snapshot(), vec: r.print?.vec ? r.print.vec.map(x => Math.round(x * 1e4) / 1e4) : null }); last = performance.now();
+        }
         else $("#rfCount").textContent = !r.found ? "Point at the chocolate" : r.sharp < MIN_SHARP ? "Hold steady" : "A bit more light, please";
       }
       $("#rfBar").style.width = Math.round(100 * shots.length / PER) + "%";
@@ -93,12 +100,28 @@
       if (shots.length) $("#rfCount").textContent = `${shots.length} of ${PER} close-ups`;
       if (shots.length >= PER) {
         stopCam(); const t = Date.now();
-        await saveShots(shots.map((u, i) => ({ cond: cond.id, key, t: t + i, bytes: dataUrlBytes(u) })));
+        await saveShots(shots.map((s, i) => ({ cond: cond.id, key, t: t + i, bytes: dataUrlBytes(s.url), vec: s.vec })));
         pick(); return;
       }
       timer = setTimeout(tick, 60);
     };
     tick();
+  }
+  // Merge every captured chocoprint straight into custom-chocolates.json (same file "Add a chocolate" writes), under
+  // the chocolate's own existing key — not added to its "chocolates" list, so it stays a normal, known chocolate;
+  // this just gives the gallery extra, fresher reference prints for it. Live as soon as that file is pushed.
+  async function downloadFresh(ev) {
+    const btn = ev.currentTarget, rows = (await allShots()).filter(r => r.vec); if (!rows.length) return;
+    btn.textContent = "Preparing…"; btn.disabled = true;
+    let cu = { chocolates: {}, prints: [] };
+    try { const r = await fetch("custom-chocolates.json", { cache: "no-store" }); if (r.ok) cu = await r.json(); } catch (e) {}
+    // the three Z chocolates share one gallery mark ("z"); their shell decides which Z (same as training's mk())
+    const mk = k => (k.startsWith("z") ? "z" : k);
+    cu.prints = (cu.prints || []).concat(rows.map(r => [mk(r.key), r.vec]));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(cu)], { type: "application/json" }));
+    a.download = "custom-chocolates.json"; document.body.appendChild(a); a.click(); a.remove();
+    btn.textContent = `Use right away (${rows.length} chocoprints)`; btn.disabled = false;
   }
   async function download(ev) {
     const btn = ev.currentTarget, rows = await allShots(); if (!rows.length) return;
