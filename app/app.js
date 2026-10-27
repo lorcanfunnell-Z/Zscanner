@@ -297,7 +297,14 @@
         setStatus(`<img class="thumb" src="${url}" alt=""><span>We could not be certain which chocolate this is.</span>`, "err");
         const s = $("#suggest"); s.hidden = false;
         s.innerHTML = `<p>Is it one of these?</p><div class="chips">${best.slice(0, 3).map(b => `<button class="chip" type="button" data-k="${b.key}"><img src="${photo(b.key)}" alt="" onerror="this.onerror=null;this.src='images/${b.key}.jpg'">${esc(label(b.key))}</button>`).join("")}</div>`;
-        s.querySelectorAll(".chip").forEach(ch => ch.onclick = () => { s.hidden = true; setStatus(""); render(ch.dataset.k, { scanned: true }); });
+        // like Face ID learning from a failed match once you enter your passcode: the model wasn't sure, but tapping
+        // one of these chips is an explicit, certain answer — a stronger signal than any confidence score — so this
+        // photo's chocoprint joins the gallery for it, even though the automatic read wasn't sure (or picked wrong)
+        s.querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+          s.hidden = true; setStatus("");
+          if (!DEBUG && res.print?.vec) Recognizer.reinforce(ch.dataset.k, res.print.vec);
+          render(ch.dataset.k, { scanned: true });
+        });
       }
     }, 30);
     img.src = url;
