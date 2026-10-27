@@ -250,7 +250,14 @@
         const scanTop = Object.entries(scanTops).sort((a, b) => b[1] - a[1])[0]?.[0];
         const scanOk = !META.scanMajority || scanTop === topKey;
         if (DEBUG && META.scanMajority) $("#hint").textContent += ` | scan ${scanTop}`;
-        if (agreed && printOk && scanOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) { answer(topKey); return; }
+        if (agreed && printOk && scanOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) {
+          // like Face ID folding a good unlock back into its template: at the highest confidence tier (both signals
+          // agree AND the combined score is itself 99% sure, not just one or the other), add this chocoprint to the
+          // gallery for the rest of this visit, so a second pass over the same box gets easier. Not during admin
+          // test sessions (DEBUG) — later test scans must stand on their own, not benefit from earlier ones.
+          if (!DEBUG && bothAgree && topP >= (META.sure ?? 0.99) && r.print?.vec) Recognizer.reinforce(topKey, r.print.vec);
+          answer(topKey); return;
+        }
       } else {
         showMark(null);
         if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again

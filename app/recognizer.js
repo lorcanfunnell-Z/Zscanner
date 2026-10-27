@@ -214,6 +214,23 @@ window.Recognizer = (() => {
     return { found: true, obj, box, sharp, light: lit, rot, qsure, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
+  // Like Face ID folding a good unlock back into its template: when a scan is answered at the highest confidence
+  // tier, its chocoprint joins the gallery for the rest of this visit, so a second pass over the same box gets
+  // easier. Session-only (never written to disk) and capped per mark (oldest dropped first), so it can only help
+  // this visit and can't drift the gallery permanently from one person's lighting.
+  const REINFORCE_CAP = 5, selfAdded = {};
+  function reinforce(key, vec) {
+    if (!gallery || !vec) return;
+    const mark = key.startsWith("z") ? "z" : key;
+    const mine = (selfAdded[mark] = selfAdded[mark] || []);
+    mine.push(vec);
+    (gallery.byMark[mark] = gallery.byMark[mark] || []).push(vec);
+    if (mine.length > REINFORCE_CAP) {
+      const old = mine.shift(), i = gallery.byMark[mark].indexOf(old);
+      if (i >= 0) gallery.byMark[mark].splice(i, 1);
+    }
+  }
+
   // For still photos: try a few squares along the long side and keep the most confident result
   function scanPhoto(img) {
     const { w, h } = srcSize(img), side = Math.min(w, h), long = Math.max(w, h), out = [];
@@ -231,5 +248,5 @@ window.Recognizer = (() => {
   const snapCan = document.createElement("canvas"); snapCan.width = snapCan.height = S; const snapCtx = snapCan.getContext("2d");
   const snapshot = () => snapCan.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
+  return { load, scan, scanPhoto, snapshot, reinforce, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
 })();
