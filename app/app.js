@@ -232,7 +232,11 @@
         // the reader's digit-count vote kept a correctly read Z dark waiting 21 s in test 4.
         const printShare = held.filter(h => h.pmark === zm(topKey)).length / held.length;
         const printOk = !META.printShare || printShare >= META.printShare;
-        const logicOk = C[topKey]?.custom ? true : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
+        // N°20's milk+white shell barely shows from above, so the reader's shell vote for it is unreliable (it flips
+        // between "dark" and "milk" depending on the moment) — don't let that veto an otherwise clear answer for it.
+        const logicOk = C[topKey]?.custom ? true
+          : META.shellOf[topKey] === "milkwhite" ? (META.logic === "shell" || META.markOf[topKey] === markVote)
+          : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
         // rule A (model 6, after test 5): don't answer against what most of the whole scan said. The answer must be the
         // chocolate that topped the most frames since this scan began, not just the last 0.6 s (stops a late misreading,
