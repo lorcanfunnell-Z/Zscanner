@@ -40,7 +40,7 @@ def run(rule, K=3, detail=False):
             if rule.get("printshare"):                          # the chocoprint named it in at least this share of frames
                 ok = ok and sum(1 for h in win if h.get("pmark") == zm(top)) / len(win) >= rule["printshare"]
             if rule.get("scanmajority"):                        # idea A: don't answer against what most of the whole scan said
-                ok = ok and jsvote([h["top"][0][0] for h in held]) == top
+                ok = ok and zm(jsvote([h["top"][0][0] for h in held])) == zm(top)
             if rule.get("printmajority"):                       # idea A2: same, using the chocoprint's per-frame answer
                 ok = ok and jsvote([h.get("pmark") for h in held]) == zm(top)
             if rule.get("anglesteady"):                         # idea B1: the held frames' side-up angles agree with each other
@@ -52,7 +52,10 @@ def run(rule, K=3, detail=False):
                     main = jsvote([str(int(((a + 22.5) % 360) // 45)) for a in rs])
                     ok = ok and all(adiff(h["rot"], int(main) * 45) <= rule["anglemain"] for h in win if h.get("rot") is not None)
             if rule.get("logic", "full") != "none":            # the phone's logic check: shell (and mark) votes must fit
-                ok = ok and vote("shell") == META["shellOf"].get(top)
+                # N°20's milk+white shell is read unreliably (28 Oct fix) - the phone skips the shell-match
+                # requirement just for it, so this replay has to do the same to actually match app.js
+                shell_ok = META["shellOf"].get(top) == "milkwhite" or vote("shell") == META["shellOf"].get(top)
+                ok = ok and shell_ok
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
             if ok and tp >= .5 and tp - sp >= .2: said = top; at = f["t"] - held[0]["t"]; break
         out.append((r["truth"], said, at if said else None))
@@ -64,7 +67,8 @@ def run(rule, K=3, detail=False):
 
 if len(sys.argv) > 2 and sys.argv[2] == "new":
     E = {"or99": 1, "printshare": .8, "logic": "shell"}
-    for name, rule in [("E (current admin rule)", E),
+    for name, rule in [("E + A (current production rule: model6 meta.json)", {**E, "scanmajority": 1}),
+                       ("E (current admin rule)", E),
                        ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
                        ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
                        ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
