@@ -5,6 +5,7 @@
 //   - "Download reference photos": the close-ups themselves, for tools/add_to_gallery.js to fold into the next
 //     trained model properly. Slower, but keeps the fuller picture (JPEGs, not just the chocoprint).
 // These photos are kept apart from test sessions, so tests stay fair.
+// Uses the .cl/.cl-screen/.cl-tile/.cl-bar CSS that collect.js injects into <head> — needs collect.js loaded first.
 (() => {
   if (window.ZADMIN !== true) return;
   const C = window.CHOCOLATES, $ = s => document.querySelector(s);
@@ -117,7 +118,13 @@
     try { const r = await fetch("custom-chocolates.json", { cache: "no-store" }); if (r.ok) cu = await r.json(); } catch (e) {}
     // the three Z chocolates share one gallery mark ("z"); their shell decides which Z (same as training's mk())
     const mk = k => (k.startsWith("z") ? "z" : k);
-    cu.prints = (cu.prints || []).concat(rows.map(r => [mk(r.key), r.vec]));
+    // each shot gets a stable id (light + chocolate + capture time, always unique) as a 3rd array element — ignored
+    // by the existing [k, v] reader in recognizer.js, but lets this button be clicked again after new captures
+    // without re-merging shots it already pushed last time
+    const shotId = r => `${r.cond}:${r.key}:${r.t}`;
+    const already = new Set((cu.prints || []).map(p => p[2]).filter(Boolean));
+    const fresh = rows.filter(r => !already.has(shotId(r)));
+    cu.prints = (cu.prints || []).concat(fresh.map(r => [mk(r.key), r.vec, shotId(r)]));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(cu)], { type: "application/json" }));
     a.download = "custom-chocolates.json"; document.body.appendChild(a); a.click(); a.remove();

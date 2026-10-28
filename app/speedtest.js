@@ -1,6 +1,7 @@
 // Speed test (admin page only): times every step of the scanner on THIS phone, without needing a chocolate.
 // It reads a stored chocolate photo 30 times and reports the average milliseconds per step, so we know where a scan's
 // time goes and what to speed up. "Copy results" puts a short summary on the clipboard to paste into the chat.
+// Uses the .cl/.cl-screen CSS that collect.js injects into <head> — needs collect.js loaded first.
 (() => {
   if (window.ZADMIN !== true) return;
   const $ = s => document.querySelector(s);

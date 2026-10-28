@@ -2,6 +2,7 @@
 // camera, without retraining. The phone turns each good frame into a chocoprint; these, with the name, shell,
 // description and a photo, go into custom-chocolates.json. Put that file in the Zscanner app folder and push it:
 // every scanner then knows the chocolate. Needs a model with chocoprints.
+// Uses the .cl/.cl-screen/.cl-tile/.cl-bar CSS that collect.js injects into <head> — needs collect.js loaded first.
 (() => {
   if (window.ZADMIN !== true) return;
   const $ = s => document.querySelector(s);
