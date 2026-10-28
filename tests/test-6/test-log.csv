@@ -1,0 +1,31 @@
+scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s
+1,2026-10-28T13:42:43.878Z,"",answer,5,zdark,false,5,86.3,zdark,5,dark,one,9,3.3,3.3
+2,2026-10-28T13:43:11.661Z,"Test 6",answer,0,0,true,0,100,7,0,milk,one,9,9.4,9.5
+3,2026-10-28T13:43:21.481Z,"Test 6",answer,5,1,false,5,62.2,8,12.1,dark,one,9,2.3,2.9
+4,2026-10-28T13:43:33.328Z,"Test 6",answer,2,2,true,2,89.2,22,5.9,milk,one,9,3.6,3.8
+5,2026-10-28T13:43:59.558Z,"Test 6",answer,6,3,false,6,99.1,5,0.8,dark,one,9,8.4,8.7
+6,2026-10-28T13:44:10.637Z,"Test 6",answer,4,4,true,4,86,zmilk,13.3,milk,two,6,0.9,1.8
+7,2026-10-28T13:44:18.860Z,"Test 6",answer,5,5,true,5,65.5,8,13.7,dark,one,9,1.0,1.0
+8,2026-10-28T13:44:43.475Z,"Test 6",answer,zwhite,zwhite,true,zwhite,100,zmilk,0,white,z,6,0.4,1.5
+9,2026-10-28T13:44:57.157Z,"Test 6",answer,9,6,false,9,98.4,3,0.9,milk,one,9,5.9,6.7
+10,2026-10-28T13:45:12.536Z,"Test 6",answer,7,7,true,7,99.7,4,0.1,milk,one,9,2.0,7.1
+11,2026-10-28T13:45:20.740Z,"Test 6",answer,5,8,false,5,50.2,zdark,23.2,dark,one,7,0.4,1.6
+12,2026-10-28T13:45:30.724Z,"Test 6",answer,9,9,true,9,99.7,2,0.2,milk,one,8,1.2,1.4
+13,2026-10-28T13:45:47.932Z,"Test 6",answer,10,10,true,10,94.3,17,4.2,dark,two,7,0.5,1.0
+14,2026-10-28T13:46:18.221Z,"Test 6",answer,zmilk,11,false,zmilk,75.4,zdark,18.3,milk,two,7,23.9,24.4
+15,2026-10-28T13:46:28.250Z,"Test 6",answer,zdark,,,zdark,99.8,17,0.2,dark,two,8,0.8,1.9
+16,2026-10-28T13:47:08.095Z,"Test 6",answer,zdark,zdark,true,zdark,82.3,5,7.6,dark,two,7,2.7,3.3
+17,2026-10-28T13:47:26.131Z,"Test 6",answer,12,12,true,12,100,22,0,milk,two,7,1.2,3.1
+18,2026-10-28T13:47:36.557Z,"Test 6",answer,15,13,false,15,99.4,21,0.3,dark,two,9,3.9,4.5
+19,2026-10-28T13:47:47.958Z,"Test 6",answer,14,14,true,14,90.5,4,9.4,milk,two,9,1.5,4.1
+20,2026-10-28T13:47:56.522Z,"Test 6",answer,15,15,true,15,99.3,23,0.5,dark,two,8,1.1,1.7
+21,2026-10-28T13:48:05.555Z,"Test 6",answer,16,16,true,16,99.6,24,0.4,milk,two,8,2.5,3.1
+22,2026-10-28T13:48:15.988Z,"Test 6",answer,17,17,true,17,100,zdark,0,dark,two,8,2.2,2.6
+23,2026-10-28T13:48:23.538Z,"Test 6",answer,zwhite,zwhite,true,zwhite,100,zmilk,0,white,z,5,0.7,1.4
+24,2026-10-28T13:48:43.428Z,"Test 6",answer,18,18,true,18,99.7,19,0.3,dark,two,7,2.8,7.9
+25,2026-10-28T13:48:50.711Z,"Test 6",answer,19,19,true,19,84.9,14,5,dark,two,8,1.1,1.8
+26,2026-10-28T13:49:26.569Z,"Test 6",answer,20,20,true,20,99.9,24,0.1,milkwhite,two,8,7.1,10.3
+27,2026-10-28T13:49:35.328Z,"Test 6",answer,5,21,false,5,50.9,21,15.7,dark,two,9,1.9,2.6
+28,2026-10-28T13:49:43.598Z,"Test 6",answer,22,22,true,22,88.9,24,10.6,milk,two,9,1.0,1.7
+29,2026-10-28T13:49:56.683Z,"Test 6",answer,23,23,true,23,99.9,22,0.1,dark,two,8,7.3,7.9
+30,2026-10-28T13:50:10.530Z,"Test 6",answer,24,24,true,24,78.2,21,15.6,milk,two,5,0.4,0.7

@@ -3,7 +3,7 @@
 // Bump MODEL_VERSION only when a model file changes: models are big (several MB) and are loaded from the phone
 // after the first visit (cache first), so a second visit doesn't download them again.
 const VERSION = "scanner-v39";
-const MODEL_VERSION = "models-6.1";
+const MODEL_VERSION = "models-6.1.1";   // 28 Oct: gallery.json grew from the reference round (963 -> 1395 references)
 const isModel = url => /\/(model\d+\/|vendor\/tf\.min\.js|vendor\/mnv2\/)/.test(url) && !/meta\.json/.test(url);   // settings (meta.json) always fresh
 const FILES = [
   "./", "index.html", "styles.css", "app.js", "recognizer.js", "install.js", "idbstore.js", "collect.js", "debuglog.js", "admin.html", "admin.js", "vendor/jszip.min.js", "manifest.webmanifest",
