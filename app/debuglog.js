@@ -9,8 +9,7 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // ---------- storage (IndexedDB, as plain data so iPhone Safari accepts it) ----------
-  const dbp = new Promise((res, rej) => { const r = indexedDB.open("zscanner-tests", 1); r.onupgradeneeded = () => r.result.createObjectStore("scans", { keyPath: "n" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-  const tx = async (mode, fn) => { const db = await dbp; return new Promise((res, rej) => { const t = db.transaction("scans", mode); const q = fn(t.objectStore("scans")); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
+  const tx = ZIdbStore.openStore("zscanner-tests", "scans", { keyPath: "n" });
   const memory = new Map();
   const put = async e => { memory.set(e.n, e); try { await tx("readwrite", s => s.put(e)); } catch (err) { console.warn("kept in memory only", err); } };
   const all = async () => { let rows = []; try { rows = await tx("readonly", s => s.getAll()) || []; } catch (e) {} const m = new Map(rows.map(r => [r.n, r])); memory.forEach((v, k) => m.set(k, v)); return [...m.values()].sort((a, b) => a.n - b.n); };

@@ -43,6 +43,7 @@ h = h.replace('  <header class="masthead">', '''  <div class="adminbar">
 
   <header class="masthead">''', 1)
 h = h.replace('  <script src="install.js"></script>', '''  <script src="vendor/jszip.min.js"></script>
+  <script src="idbstore.js"></script>
   <script src="debuglog.js"></script>
   <script src="collect.js"></script>
   <script src="addchoc.js"></script>

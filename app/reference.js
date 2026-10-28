@@ -21,8 +21,7 @@
   const PROMPTS = ["Hold the phone above it, number visible", "Tilt the phone a little each way", "A little closer, then a little further"];
 
   // ---------- storage (IndexedDB, plain bytes so iPhone Safari accepts it; memory fallback) ----------
-  const dbp = new Promise((res, rej) => { const r = indexedDB.open("zscanner-reference", 1); r.onupgradeneeded = () => r.result.createObjectStore("shots", { autoIncrement: true }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-  const tx = async (mode, fn) => { const db = await dbp; return new Promise((res, rej) => { const t = db.transaction("shots", mode); const q = fn(t.objectStore("shots")); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
+  const tx = ZIdbStore.openStore("zscanner-reference", "shots", { autoIncrement: true });
   const memory = [];
   const saveShots = async rows => { try { await tx("readwrite", s => rows.forEach(r => s.add(r))); } catch (e) { memory.push(...rows); } };
   const allShots = async () => { let st = []; try { st = await tx("readonly", s => s.getAll()) || []; } catch (e) {} return [...st, ...memory]; };

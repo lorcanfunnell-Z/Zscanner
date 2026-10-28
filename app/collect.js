@@ -21,12 +21,7 @@
   const EVERY_MS = 200, SAVE_SHARE = 1.0, SIZE = 640;   // the whole camera square, high resolution (what the live scanner sees)
 
   // ---------- storage ----------
-  const dbp = new Promise((res, rej) => {
-    const r = indexedDB.open("zscanner-collect-2", 1);   // round 2 starts with a fresh set
-    r.onupgradeneeded = () => r.result.createObjectStore("shots", { autoIncrement: true });
-    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-  });
-  const tx = async (mode, fn) => { const db = await dbp; return new Promise((res, rej) => { const t = db.transaction("shots", mode); const q = fn(t.objectStore("shots")); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
+  const tx = ZIdbStore.openStore("zscanner-collect-2", "shots", { autoIncrement: true });   // round 2 starts with a fresh set
   // iPhone Safari can refuse to store Blob objects, so photos are stored as raw bytes.
   // If storage fails completely, photos are kept in memory for this visit (download before closing the tab).
   const memory = []; let memoryOnly = false;
