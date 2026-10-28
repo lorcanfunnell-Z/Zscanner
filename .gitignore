@@ -5,3 +5,4 @@ tests/*.zip
 training-photos/
 training-synth/
 experiments/
+.claude/settings.local.json
