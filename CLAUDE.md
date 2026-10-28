@@ -43,9 +43,19 @@ Read this first, then `HANDOVER.md` (how the code fits together). History and pl
 - Real training photos come mostly from one table and light.
 - The three z-logo chocolates (dark, milk, white): the two dark-looking ones are hard to tell apart from above.
 - MAX_GLARE (0.03) is completely unvalidated — no real test frame has ever shown any glare to check it against.
+- **Camera tilt (viewing angle, not rotation):** untested and likely weak. Only handles roughly-overhead shots well.
+  Tilt augmentation for the chocoprint was tried before (train a model to be tilt-invariant from examples) and
+  rejected — not currently used (`TILT=0` in the model 6.1 recipe). The better next attempt (28 Oct, not yet built):
+  geometric perspective correction — detect the chocolate's visible top-face outline as a quadrilateral and
+  mathematically unwarp it to square-on *before* reading it, the way document-scanner apps handle a tilted page,
+  rather than training a model to tolerate the tilt. Needs real photos of chocolates shot at an angle to build and
+  check against — we have none yet. Hard limit regardless: at a steep enough angle the embossed number is physically
+  self-occluded (same reason Face ID fails at extreme head poses) — the realistic goal is "any angle a person could
+  still read it at by eye", not literally any angle.
 
 ## Next steps
-1. **Test 6** (full-box run-through): confirm rule A on a fresh session; confirm the N°20 fix and rotation fix hold up on a real phone (not just simulated replay); deliberately try to catch some glare to finally test that threshold; try a second pass over the same box to see the self-reinforcing gallery in action. Reference round in different lights ("Use right away" for instant effect) to strengthen the other lookalike chocoprints.
+1. **Test 6** (full-box run-through): confirm rule A on a fresh session; confirm the N°20 fix and rotation fix hold up on a real phone (not just simulated replay); deliberately try to catch some glare to finally test that threshold; try a second pass over the same box to see the self-reinforcing gallery in action. **Also deliberately shoot some scans at an angle, not just overhead** — that's the test data needed before the tilt/perspective-correction work below can start. Reference round in different lights ("Use right away" for instant effect) to strengthen the other lookalike chocoprints.
+1b. **Tilt / "scan from any angle"** (picked up once test 6's angled photos exist): build the perspective-correction step described above, verify against the new angled test data before keeping it, same fair-testing discipline as everything else.
 2. Nico demo feedback: client experience with a box and QR card in the existing card format; rework from his comments or make the client side ready.
 3. QR card: looks like the current card but makes clear you can scan the chocolates; luxurious and simple.
 4. Hooks (built, switched off for clients in `app/hooks-config.js`): welcome offer, My tasting (favourites), corporate report + thank-you. Need Nico's PrestaShop module — see the Hooks plan linked below.
