@@ -6,9 +6,11 @@
 //    its shell and its mark all agree. A dark two-digit chocolate can only be 10, 13, 15, 17, 18, 19, 21 or 23.
 // 4. ALIGN (Stage 2, model5 onwards): like face alignment, the close-up is straightened before reading. The chocolate is
 //    square, so its edges give the angle modulo 90 degrees (plain maths, edgeAngle); a small QUARTER model then says
-//    which side is the top. If it isn't sure: with straightened reading (meta.align) the reader tries both likely ways
-//    up and keeps the clearer reading; otherwise (model 6: the reader doesn't need straightening) the chocoprint tries
-//    both instead and keeps whichever matches a real reference more clearly — a wrongly-turned crop won't match any.
+//    which side is the top. The reader itself doesn't need straightening (shell colour and chocolate type read fine
+//    at any rotation) — straightening is only for the chocoprint. If the QUARTER model isn't sure, the chocoprint
+//    tries both likely rotations and keeps whichever matches a real reference more clearly — a wrongly-turned crop
+//    won't match anything. (An earlier design had the reader itself retry both rotations when straightened; no
+//    shipped model uses that path any more, so it was removed rather than kept as unreachable code.)
 // The admin page runs the newest candidate model; the client page keeps the proven one until a fair test says otherwise.
 window.Recognizer = (() => {
   const DIR = "model6";   // model 6.1 + rules E and A on both pages since 26 Oct 2026 (model4/ kept as a fallback)
@@ -43,7 +45,7 @@ window.Recognizer = (() => {
       for (const m of [finder, reader, quarter, printer]) if (m) { const out = m.predict(tf.zeros([1, S, S, 3])); await (Array.isArray(out) ? out[0] : out).data(); tf.dispose(out); }
       report(1);
       loadMs = performance.now() - loadStart;
-    })();
+    })().catch(e => { loading = null; throw e; });   // a failed attempt (flaky network, a 404) can be retried, not stuck forever
     return loading;
   }
 
@@ -153,14 +155,15 @@ window.Recognizer = (() => {
     if (!opts.track) prev = null;
     const box = { cx, cy, size: Math.max(0.08, bs) }; lap("finder");
     if (obj < 0.5) { prev = null; return { found: false, obj, box }; }
-    if (obj < 0.5) return { found: false, obj, box };
     const side = box.size * meta.readerPad * sq.size, x = sq.x + cx * sq.size - side / 2, y = sq.y + cy * sq.size - side / 2;
     grab(source, x, y, side).dispose();
     snapCtx.drawImage(canvas, 0, 0);   // keep the standard close-up (whole chocolate, as seen) for the test log and gallery
     const sharp = sharpness(), lit = light(); lap("crop + sharpness");
     let pid, psh, pmk, rot = 0, qsure = 1, resolvedPrint = null;
-    if (!quarter) [pid, psh, pmk] = readAt(source, x, y, side, 0);
-    else if (!meta.align) {                                    // reader reads as it is; straightening is only for the chocoprint
+    if (!quarter) {
+      [pid, psh, pmk] = readAt(source, x, y, side, 0);
+      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs } };   // model4 fallback: still worth reusing the box
+    } else {                                                   // reader reads as it is; straightening is only for the chocoprint
       [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
       const e = reuse && prev.e != null ? prev.e : edgeAngle(); lap("straighten (edges)");   // same box as last frame → same angle
       const de = prev ? Math.abs(((e - prev.e) % 90 + 135) % 90 - 45) : 99;   // change in angle since last frame (mod 90)
@@ -171,30 +174,19 @@ window.Recognizer = (() => {
         const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
         qorder = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a]); qsure = pq[qorder[0]];
       }
-      const q = qorder[0]; rot = -e + 90 * q; lap("which side is up");
+      let q = qorder[0]; rot = -e + 90 * q; lap("which side is up");
       // unsure which way is up: don't hand the chocoprint (80% of the final decision) a single untested guess.
       // Try the two likeliest rotations and keep whichever actually looks like a real reference — a wrongly-turned
       // crop won't match anything, so the chocoprint itself is a better judge of "which way up" than the quarter
       // model's own confidence here.
       if (qsure < 0.9 && printer && qorder.length > 1) {
-        const tries = [q, qorder[1]].map(qq => { const r = -e + 90 * qq; return { rot: r, pr: computePrint(source, x, y, side, r) }; });
+        const tries = [q, qorder[1]].map(qq => { const r = -e + 90 * qq; return { q: qq, rot: r, pr: computePrint(source, x, y, side, r) }; });
         const best = tries.sort((a, b) => b.pr.sim - a.pr.sim)[0];
-        rot = best.rot; resolvedPrint = best.pr; lap("which side is up (chocoprint check)");
+        // remember the orientation the chocoprint actually settled on, not the quarter model's rejected raw guess —
+        // otherwise a cached reuse on the very next frame would silently revert to the wrong rotation
+        rot = best.rot; q = best.q; qsure = 1; resolvedPrint = best.pr; lap("which side is up (chocoprint check)");
       }
       if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs }, e, q, qsure };
-    } else {
-      const e = edgeAngle();                                   // 1. square it up
-      const sqd = grab(source, x, y, side, -e);
-      const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
-      const order = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a]); qsure = pq[order[0]];
-      const tries = qsure >= 0.9 ? [order[0]] : order.slice(0, 2);   // 2. which side is up (two tries if unsure)
-      let best = null;
-      for (const q of tries) {
-        const r = readAt(source, x, y, side, -e + 90 * q), ranked = combine(...r);
-        if (!best || ranked[0].p > best.top) best = { top: ranked[0].p, r, rot: -e + 90 * q };
-      }
-      [pid, psh, pmk] = best.r; rot = best.rot;
-      if (tries.length > 1) grab(source, x, y, side, rot).dispose();   // leave the chosen view on the canvas for the snapshot
     }
     let ranked = combine(pid, psh, pmk), print = null; const m4top = ranked[0].key;
     if (printer) {
@@ -230,6 +222,17 @@ window.Recognizer = (() => {
       if (i >= 0) gallery.byMark[mark].splice(i, 1);
     }
   }
+  // undo a reinforcement (e.g. a confident automatic answer that turned out wrong and was then corrected) —
+  // only ever removes a vector this same visit added, never anything from the original trained gallery
+  function unreinforce(key, vec) {
+    if (!gallery || !vec) return;
+    const mark = key.startsWith("z") ? "z" : key;
+    const mine = selfAdded[mark]; if (!mine) return;
+    const i = mine.indexOf(vec); if (i < 0) return;
+    mine.splice(i, 1);
+    const j = (gallery.byMark[mark] || []).indexOf(vec);
+    if (j >= 0) gallery.byMark[mark].splice(j, 1);
+  }
 
   // For still photos: try a few squares along the long side and keep the most confident result
   function scanPhoto(img) {
@@ -248,5 +251,5 @@ window.Recognizer = (() => {
   const snapCan = document.createElement("canvas"); snapCan.width = snapCan.height = S; const snapCtx = snapCan.getContext("2d");
   const snapshot = () => snapCan.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, reinforce, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
+  return { load, scan, scanPhoto, snapshot, reinforce, unreinforce, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
 })();

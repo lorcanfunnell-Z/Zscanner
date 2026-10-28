@@ -21,13 +21,18 @@
   const MIN_SIZE = 0.13;    // chocolate smaller than this share of the view: ask to move closer
   const MIN_LIGHT = 50;      // model 6: chocolate's brighter parts darker than this → too dark to read (tests 1-3: all such scans wrong)
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
-  const IDK_AFTER_MS = 2000; // candidate model (admin): after the hold, this long without an answer → say what would help
+  const IDK_AFTER_MS = 2000; // after the hold, this long without an answer → say what would help (live on both pages: model6's meta.json sets candidate:true for each)
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
   let META = { shellOf: {}, markOf: {} };
   fetch("model6/meta.json").then(r => r.json()).then(m => META = m).catch(() => {});
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const zm = k => k && k.startsWith("z") ? "z" : k;   // the three Z chocolates read as one for voting/tallying purposes
+  // "highest confidence tier": both signals agree AND the combined score is itself this sure, not just one or the
+  // other — used both for the or-99 escape hatch and for deciding whether to self-reinforce (live scan and photo)
+  const sureThresh = () => META.sure ?? 0.99;
+  const highestConfidence = (agree, p) => agree && p >= sureThresh();
 
   function utm(url, content) {
     const u = new URL(url);
@@ -42,13 +47,14 @@
   const label = k => C[k].z || C[k].custom ? (C[k].custom && C[k].no ? "N°" + C[k].no + " " : "") + C[k].name : "N°" + k + " " + C[k].name;
 
   // ---------- Result card ----------
-  // an automatic answer's chocoprint, kept just long enough to reinforce it if the person corrects it via one of the
-  // two existing "that's not right" paths below (Z shell colour, or the number grid) — not a new UI, just teaching
-  // the existing correction paths to feed the gallery, the same way a confirmed-right answer already does
-  let pendingFixVec = null;
+  // The most recent automatic answer's chocoprint, kept so an explicit correction can move its reinforcement to the
+  // right chocolate — via ANY tray tap, not only the "choose the number instead" link (the tray is always visible,
+  // so most real corrections never use that link at all). reinforcedAs is which gallery mark (if any) this vec was
+  // auto-reinforced into, so a correction can undo that specific reinforcement, not just add a new one on top.
+  let lastScan = null;   // {key, vec, reinforcedAs}
   function render(key, opts = {}) {
     const c = C[key]; if (!c) return;
-    if (opts.scanned) pendingFixVec = null;   // a fresh automatic answer supersedes any earlier pending correction
+    if (opts.scanned) lastScan = { key, vec: opts.vec || null, reinforcedAs: opts.reinforcedAs || null };
     const title = c.z || (c.custom && !c.no)
       ? esc(c.name)
       : c.custom ? `<span class="n"><span class="no">N°</span>${esc(c.no)}</span>${esc(c.name)}`
@@ -75,12 +81,10 @@
         </div>
         ${opts.scanned ? `<p class="wrong">Not the right chocolate? <button type="button" id="fixBtn">Choose the number instead</button></p>` : ""}
       </article>`;
-    document.querySelectorAll(".zbtn").forEach(b => b.onclick = () => {
-      const corrected = "z" + b.dataset.z;
-      if (!DEBUG && opts.scanned && opts.vec && corrected !== key) Recognizer.reinforce(corrected, opts.vec);
-      render(corrected, { ...opts, keepScroll: true });
-    });
-    const fix = $("#fixBtn"); if (fix) fix.onclick = () => { if (opts.scanned && opts.vec) pendingFixVec = opts.vec; $("#grid").scrollIntoView({ behavior: "smooth", block: "center" }); };
+    // the three Z chocolates share one gallery mark, so picking a different shell colour here wouldn't actually
+    // change what's in the gallery (it would just remove and re-add the identical chocoprint) — nothing to reinforce
+    document.querySelectorAll(".zbtn").forEach(b => b.onclick = () => render("z" + b.dataset.z, { ...opts, keepScroll: true }));
+    const fix = $("#fixBtn"); if (fix) fix.onclick = () => $("#grid").scrollIntoView({ behavior: "smooth", block: "center" });
     document.querySelectorAll(".key").forEach(k => k.setAttribute("aria-current", String(k.dataset.k === key || (k.dataset.k === "z" && !!c.z))));
     if (!opts.example && !opts.keepScroll) $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
     // for hooks.js (welcome offer, tasting list, corporate counting); repeat = the same result redrawn (e.g. Z colour change)
@@ -95,9 +99,15 @@
     const k = e.target.closest(".key"); if (!k) return;
     setStatus(""); $("#suggest").hidden = true;
     const key = k.dataset.k === "z" ? "zdark" : k.dataset.k;
-    // a pick right after "Choose the number instead" is an explicit correction of that automatic answer
-    if (!DEBUG && pendingFixVec) Recognizer.reinforce(key, pendingFixVec);
-    pendingFixVec = null;
+    // any tap here right after an automatic answer is an explicit correction of it, however the person got to the
+    // tray — not only via "choose the number instead" (the tray is always visible too). Move the reinforcement
+    // rather than just adding to it: undo whatever the automatic answer wrongly reinforced, then reinforce the
+    // chocolate actually confirmed.
+    if (!DEBUG && lastScan && lastScan.vec && key !== lastScan.key) {
+      if (lastScan.reinforcedAs) Recognizer.unreinforce(lastScan.reinforcedAs, lastScan.vec);
+      Recognizer.reinforce(key, lastScan.vec);
+    }
+    lastScan = null;
     render(key);
   };
 
@@ -137,7 +147,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; scanTops = {}; pendingFixVec = null;
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; scanTops = {}; lastScan = null;
     loop();
   }
 
@@ -176,10 +186,10 @@
     mark.style.setProperty("--progress", Math.min(1, progress));
     mark.hidden = false; mark.dataset.label = "";
   }
-  function answer(key, vec) {
+  function answer(key, vec, reinforcedAs) {
     report("answer", key);
     viewer.classList.add("locked");
-    setTimeout(() => { stopCamera(); render(key, { scanned: true, vec }); setStatus(`Found: ${esc(label(key))}`); }, 250);
+    setTimeout(() => { stopCamera(); render(key, { scanned: true, vec, reinforcedAs }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
   function resetHold(t) { held = []; holdStart = t; }
 
@@ -189,7 +199,7 @@
     if (video.readyState >= 2) {
       const r = Recognizer.scan(video, undefined, { track: true });   // reuse work between frames while holding (admin model)
       const tooSmall = r.found && r.box.size < MIN_SIZE, blurry = r.found && r.sharp < MIN_SHARP;
-      // model 6 (admin): too dark or a strong reflection → don't read this frame, say what to do
+      // model 6: too dark or a strong reflection → don't read this frame, say what to do (live on both pages)
       const tooDark = !!META.candidate && r.found && r.light && r.light.p90 < MIN_LIGHT;
       const glare = !!META.candidate && r.found && r.light && r.light.glare > MAX_GLARE;
       if (r.found && (tooSmall || blurry || tooDark || glare)) {
@@ -211,7 +221,7 @@
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
           p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark });
-        if (r.ranked[0]) scanTops[r.ranked[0].key] = (scanTops[r.ranked[0].key] || 0) + 1;
+        if (r.ranked[0]) scanTops[zm(r.ranked[0].key)] = (scanTops[zm(r.ranked[0].key)] || 0) + 1;   // normalised so a Z chocolate's flickering shell-colour read doesn't split its own tally
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
@@ -222,9 +232,12 @@
         const progress = (t0 - holdStart) / holdMs;
         showMark(r, progress);
         $("#hint").textContent = progress < 1 ? "Hold still over the chocolate" : "Reading the number…";
-        // average every frame in the window
-        const keys = Object.keys(held[0].p), avg = {};
-        keys.forEach(k => avg[k] = held.reduce((s, f) => s + f.p[k], 0) / held.length);
+        // average every frame in the window. Keys come from every frame, not just the first: a custom (admin-added)
+        // chocolate's print match can come and go frame to frame, so held[0] alone might not have every key that
+        // appears later in the window — missing values default to 0 rather than producing NaN.
+        const keys = new Set(); held.forEach(f => Object.keys(f.p).forEach(k => keys.add(k)));
+        const avg = {};
+        keys.forEach(k => avg[k] = held.reduce((s, f) => s + (f.p[k] || 0), 0) / held.length);
         const sorted = Object.entries(avg).sort((a, b) => b[1] - a[1]);
         const [topKey, topP] = sorted[0], secondP = sorted[1] ? sorted[1][1] : 0;
         const count = v => held.filter(f => f.shell === v).length;
@@ -241,10 +254,12 @@
         const markVote = lastInfo.mark;
         // rule "agree" (model 5): the classifier and the chocoprints, each voting over the held second, must name the same chocolate
         const vote = f => { const c = {}; held.forEach(h => { const k = f(h); if (k) c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
-        const zm = k => k && k.startsWith("z") ? "z" : k;
+        // once rule E (printOk) requires the chocoprint to name topKey in >=printShare of the window, its vote here
+        // is already guaranteed true whenever printOk passes — this clause only still matters when printShare is
+        // unset for some candidate model, so it's kept rather than assumed redundant
         const bothAgree = zm(vote(h => h.m4top)) === zm(topKey) && vote(h => h.pmark) === zm(topKey);
         // rule "agree-or-99" (model 6, Lorcan's choice D+): both agree, or the combined score is at least 99% sure
-        const agreed = !META.rule ? true : META.rule === "agree" ? bothAgree : bothAgree || topP >= (META.sure ?? 0.99);
+        const agreed = !META.rule ? true : META.rule === "agree" ? bothAgree : bothAgree || topP >= sureThresh();
         if (DEBUG && META.rule) $("#hint").textContent += ` | agree ${agreed ? "yes" : "no"} (${vote(h => h.m4top)} / ${vote(h => h.pmark)})`;
         // rule E (model 6, after test 4): the chocoprint must name this chocolate in at least META.printShare of the held frames
         // (stops lookalikes like 20/21 flipping through), and the logic check uses the shell colour only (META.logic "shell"):
@@ -261,15 +276,17 @@
         // chocolate that topped the most frames since this scan began, not just the last 0.6 s (stops a late misreading,
         // e.g. test 5's N°20 read as 24 once the which-side-up step turned it sideways).
         const scanTop = Object.entries(scanTops).sort((a, b) => b[1] - a[1])[0]?.[0];
-        const scanOk = !META.scanMajority || scanTop === topKey;
+        const scanOk = !META.scanMajority || scanTop === zm(topKey);
         if (DEBUG && META.scanMajority) $("#hint").textContent += ` | scan ${scanTop}`;
         if (agreed && printOk && scanOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) {
-          // like Face ID folding a good unlock back into its template: at the highest confidence tier (both signals
-          // agree AND the combined score is itself 99% sure, not just one or the other), add this chocoprint to the
-          // gallery for the rest of this visit, so a second pass over the same box gets easier. Not during admin
-          // test sessions (DEBUG) — later test scans must stand on their own, not benefit from earlier ones.
-          if (!DEBUG && bothAgree && topP >= (META.sure ?? 0.99) && r.print?.vec) Recognizer.reinforce(topKey, r.print.vec);
-          answer(topKey, r.print?.vec); return;
+          // like Face ID folding a good unlock back into its template: at the highest confidence tier, add this
+          // chocoprint to the gallery for the rest of this visit, so a second pass over the same box gets easier.
+          // Not during admin test sessions (DEBUG) — later test scans must stand on their own, not benefit from
+          // earlier ones. If this answer turns out wrong and gets corrected, the correction (grid.onclick) undoes
+          // this specific reinforcement rather than just piling another one on top.
+          const autoReinforced = !DEBUG && highestConfidence(bothAgree, topP) && !!r.print?.vec;
+          if (autoReinforced) Recognizer.reinforce(topKey, r.print.vec);
+          answer(topKey, r.print?.vec, autoReinforced ? topKey : null); return;
         }
       } else {
         showMark(null);
@@ -283,9 +300,11 @@
   // ---------- Single photo (works without live camera access) ----------
   async function fromPhoto(file) {
     if (!file || !(await ensureModel())) return;
+    lastScan = null;   // a fresh photo attempt shouldn't let an unrelated earlier scan's correction window stay open
     const url = URL.createObjectURL(file);
     setStatus(`<img class="thumb" src="${url}" alt=""><span class="dot"></span><span>Reading your chocolate…</span>`);
     const img = new Image();
+    img.onerror = () => setStatus(`<img class="thumb" src="${url}" alt=""><span>This photo could not be opened. Please try another.</span>`, "err");
     img.onload = () => setTimeout(() => {
       const res = Recognizer.scanPhoto(img);
       const best = res ? res.ranked.filter(b => C[b.key]) : [];
@@ -298,13 +317,13 @@
         return;
       }
       // model 6: the same rule as live scanning (both opinions agree, or 99% sure); otherwise offer the likeliest choices
-      const zk = k => k && k.startsWith("z") ? "z" : k;
-      const bothAgreePhoto = zk(res.m4top) === zk(best[0].key) && res.print?.mark === zk(best[0].key);
-      const photoSure = META.rule === "agree-or-99" ? bothAgreePhoto || best[0].p >= (META.sure ?? 0.99) : best[0].p >= PHOTO_SURE;
+      const bothAgreePhoto = zm(res.m4top) === zm(best[0].key) && res.print?.mark === zm(best[0].key);
+      const photoSure = META.rule === "agree-or-99" ? bothAgreePhoto || best[0].p >= sureThresh() : best[0].p >= PHOTO_SURE;
       if (photoSure) {
         // same highest-confidence reinforcement as live scanning, for the same reason
-        if (!DEBUG && bothAgreePhoto && best[0].p >= (META.sure ?? 0.99) && res.print?.vec) Recognizer.reinforce(best[0].key, res.print.vec);
-        render(best[0].key, { scanned: true, vec: res.print?.vec });
+        const autoReinforced = !DEBUG && highestConfidence(bothAgreePhoto, best[0].p) && !!res.print?.vec;
+        if (autoReinforced) Recognizer.reinforce(best[0].key, res.print.vec);
+        render(best[0].key, { scanned: true, vec: res.print?.vec, reinforcedAs: autoReinforced ? best[0].key : null });
         setStatus(`<img class="thumb" src="${url}" alt=""><span>Found: ${esc(label(best[0].key))}</span>`);
         $("#suggest").hidden = true;
       } else {
@@ -316,8 +335,9 @@
         // photo's chocoprint joins the gallery for it, even though the automatic read wasn't sure (or picked wrong)
         s.querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
           s.hidden = true; setStatus("");
-          if (!DEBUG && res.print?.vec) Recognizer.reinforce(ch.dataset.k, res.print.vec);
-          render(ch.dataset.k, { scanned: true });
+          const reinforced = !DEBUG && !!res.print?.vec;
+          if (reinforced) Recognizer.reinforce(ch.dataset.k, res.print.vec);
+          render(ch.dataset.k, { scanned: true, vec: res.print?.vec, reinforcedAs: reinforced ? ch.dataset.k : null });
         });
       }
     }, 30);
