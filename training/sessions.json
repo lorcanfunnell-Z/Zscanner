@@ -1,10 +1,12 @@
 {
   "heldBack": [
     "test-4",
-    "test-5"
+    "test-5",
+    "test-6"
   ],
   "inGallery": [
     "test-3",
     "2026-10-28"
-  ]
+  ],
+  "note": "test-4 and test-5 are still genuinely never-trained-on, but have now been used repeatedly to pick decision rules (E, then A) by eye - they're no longer a fresh check for that purpose, just for retraining. test-6 is the current fresh session for rule decisions; keep adding each new one here until it's deliberately folded into the gallery like test-3 was."
 }
