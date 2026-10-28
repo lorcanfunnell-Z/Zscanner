@@ -28,9 +28,13 @@ Never put anything confidential on the admin page.
 2. **Quality checks** skip frames that are blurry, too small, too dark or have a strong reflection, and show a hint.
 3. **Reader** names the chocolate, its shell colour and its number of digits; these are multiplied (the "logic step"):
    e.g. a dark, two-digit chocolate can't be N°7.
-4. **Straightening** (edge maths + a "which side is up" model) turns the number upright.
+4. **Straightening** (edge maths + a "which side is up" model) turns the number upright. If that model isn't sure,
+   the chocoprint itself settles it (28 Oct): both likely rotations are tried and whichever matches a real reference
+   more clearly is kept, rather than trusting one guess blind.
 5. **Chocoprint**: a fingerprint of the zoomed number (black and white, shape only), compared with a **gallery** of
-   reference fingerprints from real photos.
+   reference fingerprints from real photos — plus anything added during this visit (28 Oct): a confident answer, or
+   an explicit correction via "wrong colour?"/"choose the number instead", joins the gallery for the rest of the
+   visit (like Face ID folding a successful unlock into its template), capped and session-only.
 6. **Decision** over 0.4 s (at least 3 frames): answer only if the reader and the chocoprint agree, or it is ≥ 99%
    sure; otherwise "I don't know" + a hint. The number tray is always there as a one-tap fallback.
 
