@@ -117,6 +117,5 @@
   "version": "6.1",
   "printShare": 0.8,
   "logic": "shell",
-  "ruleNote": "E + A (26 Oct 2026): D+ plus chocoprint in >=80% of held frames; logic check on shell only; and the answer must be the chocolate that topped the most frames since the scan began (A, after test 5's 20 -> 24). A chosen on test 5 traces; to be confirmed on test 6.",
-  "scanMajority": true
+  "ruleNote": "E (26 Oct 2026): D+ plus chocoprint in >=80% of held frames; logic check on shell only. Rule A (scan-wide majority, added after test 5's 20 -> 24) was tried alongside this but never confirmed: zero effect on test-4 and test-6, and on test-5 itself it now only costs an answered scan with no reduction in wrong answers, since the N°20 and rotation fixes already fixed what it was patching. Removed 28 Oct."
 }

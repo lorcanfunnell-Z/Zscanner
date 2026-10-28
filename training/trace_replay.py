@@ -67,8 +67,7 @@ def run(rule, K=3, detail=False):
 
 if len(sys.argv) > 2 and sys.argv[2] == "new":
     E = {"or99": 1, "printshare": .8, "logic": "shell"}
-    for name, rule in [("E + A (current production rule: model6 meta.json)", {**E, "scanmajority": 1}),
-                       ("E (current admin rule)", E),
+    for name, rule in [("E (current production rule: model6 meta.json)", E),
                        ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
                        ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
                        ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),

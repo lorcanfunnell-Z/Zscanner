@@ -147,7 +147,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; scanTops = {}; lastScan = null;
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; lastScan = null;
     loop();
   }
 
@@ -164,7 +164,6 @@
   const DEBUG = window.ZADMIN === true;   // live numbers + test log only on the admin page
   let held = [], holdStart = 0;            // frames collected during the current hold
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
-  let scanTops = {};                          // rule A: how often each chocolate topped a frame since this scan began
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
   let rejected = [];   // admin only: frames seen but skipped (too small/blurry/dark/glare), so the quality gates can be checked against real misses too
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
@@ -221,7 +220,6 @@
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
           p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark });
-        if (r.ranked[0]) scanTops[zm(r.ranked[0].key)] = (scanTops[zm(r.ranked[0].key)] || 0) + 1;   // normalised so a Z chocolate's flickering shell-colour read doesn't split its own tally
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
@@ -272,13 +270,7 @@
           : META.shellOf[topKey] === "milkwhite" ? (META.logic === "shell" || META.markOf[topKey] === markVote)
           : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
-        // rule A (model 6, after test 5): don't answer against what most of the whole scan said. The answer must be the
-        // chocolate that topped the most frames since this scan began, not just the last 0.6 s (stops a late misreading,
-        // e.g. test 5's N°20 read as 24 once the which-side-up step turned it sideways).
-        const scanTop = Object.entries(scanTops).sort((a, b) => b[1] - a[1])[0]?.[0];
-        const scanOk = !META.scanMajority || scanTop === zm(topKey);
-        if (DEBUG && META.scanMajority) $("#hint").textContent += ` | scan ${scanTop}`;
-        if (agreed && printOk && scanOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) {
+        if (agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) {
           // like Face ID folding a good unlock back into its template: at the highest confidence tier, add this
           // chocoprint to the gallery for the rest of this visit, so a second pass over the same box gets easier.
           // Not during admin test sessions (DEBUG) — later test scans must stand on their own, not benefit from
