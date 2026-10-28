@@ -1,7 +1,10 @@
 // Browser smoke test (used by tools/check.sh --browser): opens the client and admin pages in a headless browser,
 // identifies chocolates from stored photos, and checks the client page shows no admin tools or hooks.
 // Needs a local server on port 8767 serving app/ (check.sh starts one) and Playwright with Chromium.
+const path = require("path");
 const { chromium } = require("playwright");
+const sharp = require("sharp");
+const { edgeAngle } = require("../training/align_lib.js");
 (async () => {
   let fails = 0; const ok = (c, w) => { console.log(`${c ? "  ok  " : "  FAIL"}  ${w}`); if (!c) fails++; };
   const b = await chromium.launch(), ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
@@ -23,6 +26,18 @@ const { chromium } = require("playwright");
   const a = await ctx.newPage(), ar = await run(a, "http://localhost:8767/admin.html", true);
   ok(await a.evaluate(() => Recognizer.model) === "model6", "admin page runs model 6");
   ok(/N°18/.test(ar["18"]) && /N°21/.test(ar["21"]), `admin photo upload: ${ar["18"]} / ${ar["21"]}`);
+  // recognizer.js's inlined straightening maths vs training/align_lib.js's copy: deliberately duplicated (one reads
+  // a canvas, the other a raw buffer) with nothing else checking they stay in sync as the maths evolves
+  const angleInBrowser = await a.evaluate(async () => {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = "images/18.jpg"; });
+    return Recognizer._edgeAngleOf(img);
+  });
+  const { data: rgb } = await sharp(path.join(__dirname, "..", "app", "images", "18.jpg"))
+    .resize(224, 224, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const angleInNode = edgeAngle(new Uint8Array(rgb), 224).angle;
+  const angleDiff = Math.abs(((angleInBrowser - angleInNode) % 90 + 135) % 90 - 45);   // smallest gap, mod 90
+  ok(angleDiff < 5, `recognizer.js's edgeAngle agrees with align_lib.js's (browser ${angleInBrowser.toFixed(1)}°, node ${angleInNode.toFixed(1)}°)`);
   const c = await ctx.newPage(), cr = await run(c, "http://localhost:8767/index.html", false);
   ok(await c.evaluate(() => Recognizer.model) === "model6", "client page runs model 6");
   ok(!(await c.$(".adminbar")) && !(await c.$("section.tl")) && (await c.$$(".hk, .hk-heart, .hk-tasting")).length === 0, "client page: no admin tools, no hooks");

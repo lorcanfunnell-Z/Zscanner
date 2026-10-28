@@ -86,6 +86,14 @@ window.Recognizer = (() => {
     }
     return (Math.atan2(im, re) * 180 / Math.PI) / 4;
   } }
+  // test-only: lets tools/browser_smoke.js confirm this copy of the straightening maths still agrees with
+  // training/align_lib.js's copy (deliberately duplicated — this one reads a canvas, that one a raw buffer — with
+  // nothing else checking they stay in sync). Not used by the app itself.
+  function _edgeAngleOf(img) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(img, 0, 0, S, S);
+    return edgeAngle();
+  }
   const readAt = (source, x, y, side, rot) => {
     const crop = grab(source, x, y, side, rot);
     const rd = tf.tidy(() => reader.predict(crop.expandDims(0))); crop.dispose();
@@ -251,5 +259,5 @@ window.Recognizer = (() => {
   const snapCan = document.createElement("canvas"); snapCan.width = snapCan.height = S; const snapCtx = snapCan.getContext("2d");
   const snapshot = () => snapCan.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, reinforce, unreinforce, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
+  return { load, scan, scanPhoto, snapshot, reinforce, unreinforce, _edgeAngleOf, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
 })();
