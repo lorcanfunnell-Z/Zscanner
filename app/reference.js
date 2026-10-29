@@ -17,7 +17,7 @@
     { id: "lamp", name: "Under a lamp", tip: "Ceiling light or desk lamp, evening-style light" },
     { id: "box", name: "Inside the box", tip: "In its place in the open box" }
   ];
-  const PER = 8, GAP_MS = 300, MIN_SHARP = 45, MIN_LIGHT = 50;
+  const PER = 8, GAP_MS = 300, MIN_SHARP = 45, MIN_LIGHT = 50, MIN_SIZE = 0.13;   // same thresholds as the live scanner (app.js)
   const PROMPTS = ["Hold the phone above it, number visible", "Tilt the phone a little each way", "A little closer, then a little further"];
 
   // ---------- storage (IndexedDB, plain bytes so iPhone Safari accepts it; memory fallback) ----------
@@ -90,10 +90,10 @@
       if (!stream) return;
       if (v.readyState >= 2 && performance.now() - last >= GAP_MS) {
         const r = Recognizer.scan(v);
-        if (r.found && r.sharp >= MIN_SHARP && (!r.light || r.light.p90 >= MIN_LIGHT)) {
+        if (r.found && r.box.size >= MIN_SIZE && r.sharp >= MIN_SHARP && (!r.light || r.light.p90 >= MIN_LIGHT)) {
           shots.push({ url: Recognizer.snapshot(), vec: r.print?.vec ? r.print.vec.map(x => Math.round(x * 1e4) / 1e4) : null }); last = performance.now();
         }
-        else $("#rfCount").textContent = !r.found ? "Point at the chocolate" : r.sharp < MIN_SHARP ? "Hold steady" : "A bit more light, please";
+        else $("#rfCount").textContent = !r.found ? "Point at the chocolate" : r.box.size < MIN_SIZE ? "Fill more of the frame" : r.sharp < MIN_SHARP ? "Hold steady" : "A bit more light, please";
       }
       $("#rfBar").style.width = Math.round(100 * shots.length / PER) + "%";
       $("#rfSay").textContent = PROMPTS[Math.min(PROMPTS.length - 1, Math.floor(shots.length / (PER / PROMPTS.length)))];
