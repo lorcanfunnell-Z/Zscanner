@@ -14,6 +14,7 @@ const { combine, printScores } = require("./lib/evaluate.js");
 const { S } = require("./lib/common.js");
 const { edgeAngle } = require("./align_lib.js");
 const MERGED = process.env.MERGED === "1";
+const TOPK = process.env.TOPK ? Number(process.env.TOPK) : 3;
 
 const hold = process.env.HOLD_TEST ? process.env.HOLD_TEST.split(",").filter(Boolean) : undefined;
 const { test, heldScans } = loadData({ synth: false, tests: false, hold });
@@ -37,7 +38,7 @@ const { test, heldScans } = loadData({ synth: false, tests: false, hold });
     const x2 = toTensor(await Promise.all(b.map(a => zoomView(a, false, { gray })))); const e = norm(pm.predict(x2)); const E = e.arraySync(); tf.dispose([x2, e]);
     b.forEach((a, j) => {
       const m4 = combine(I[j], SH[j], MK[j]);
-      const { byMark, perChocolate: pp } = printScores(E[j], gal.entries);
+      const { byMark, perChocolate: pp } = printScores(E[j], gal.entries, 20, TOPK);
       const prod = IDS.map((k, n) => m4[n] * pp[n]), ps = prod.reduce((u, w) => u + w, 0);
       if (process.env.NNCHECK) { let best = -2, bl = ""; gal.entries.forEach(([m, v]) => { const s2 = v.reduce((acc, x, k) => acc + x * E[j][k], 0); if (s2 > best) { best = s2; bl = m; } }); console.log("NN", a.cls, bl, best.toFixed(3)); }
       rows.push({ truth: a.cls, m4, pp, both: prod.map(v => v / ps), sim: byMark });
