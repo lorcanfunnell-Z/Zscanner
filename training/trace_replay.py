@@ -65,6 +65,14 @@ def run(rule, K=3, detail=False):
     slow = " ".join(f"{o[0]}:{o[2]/1000:.1f}s" for o in ans if o[2] > 3000)
     return f"answered {len(ans)}/{len(out)}, wrong {len(wrong)} {' '.join(t + '→' + s for t, s, _ in wrong)} | typical {med:.1f}s after first seen | slow: {slow}"
 
+if len(sys.argv) > 2 and sys.argv[2] == "sweep":
+    # sweeps printShare (currently 0.8 in app/model6/meta.json) against the usual held-back sessions, rule E
+    # otherwise unchanged (or99 + shell-only logic). No new photos needed: same logged traces, just a different cutoff.
+    for ps in [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+        tag = f"printShare={ps}" + (" (current)" if ps == META.get("printShare") else "")
+        print(f"{tag:28s} {run({'or99': 1, 'printshare': ps, 'logic': 'shell'})}")
+    sys.exit()
+
 if len(sys.argv) > 2 and sys.argv[2] == "new":
     E = {"or99": 1, "printshare": .8, "logic": "shell"}
     for name, rule in [("E (current production rule: model6 meta.json)", E),
