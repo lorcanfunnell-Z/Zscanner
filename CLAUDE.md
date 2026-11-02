@@ -22,7 +22,7 @@ Read this first, then `HANDOVER.md` (how the code fits together). History and pl
 - English first; French later if needed.
 
 ## Current state (2 Nov 2026)
-- Latest commit as of this write-up: `d0cbb74` "Document the MobileNetV3-Small backbone attempt and why it's blocked" (see `git log` for anything after).
+- Latest commit as of this write-up: `181e3b9` "Unblock MobileNetV3-Small via graph-model format, then reject it on real numbers" (see `git log` for anything after).
 - Both pages now use **model 6.1 + rule E only** (rule A removed 28 Oct, see below). The reader/finder/quarter/chocoprint model weights haven't changed since 6.1 shipped, but `app/model6/gallery.json` grew from 963 to 1395 references on 28 Oct, then had 2 confirmed-bad entries removed on 29 Oct (1393 now) — see "Gallery audit" below. `MODEL_VERSION` bumped each time so phones refetch it. `app/model4` kept as a fallback (see HANDOVER).
 - Pipeline: finder → quality checks (blur, size, dark, glare) → reader (MobileNetV2: chocolate, shell colour, mark) × logic step → straightening (edge maths + which-side-up model) → chocoprint (ArcFace embedding of the zoomed black-and-white number, compared with a gallery of 1393 references as of 29 Oct, plus anything added this visit — see below) → decision.
 - Rule E: chocoprint must name the chocolate in ≥80% of held frames; logic check uses shell colour only (skipped specifically for N°20, see fixes below).
