@@ -42,7 +42,7 @@ window.Recognizer = (() => {
       }
       report(0.92);
       // warm up: the first run prepares the phone's graphics chip; reading the result waits until that is really done
-      for (const m of [finder, reader, quarter, printer]) if (m) { const out = m.predict(tf.zeros([1, S, S, 3])); await (Array.isArray(out) ? out[0] : out).data(); tf.dispose(out); }
+      for (const m of [finder, reader, quarter, printer]) if (m) { const z = tf.zeros([1, S, S, 3]); const out = m.predict(z); await (Array.isArray(out) ? out[0] : out).data(); tf.dispose(out); z.dispose(); }
       report(1);
       loadMs = performance.now() - loadStart;
     })().catch(e => { loading = null; throw e; });   // a failed attempt (flaky network, a 404) can be retried, not stuck forever
@@ -60,7 +60,10 @@ window.Recognizer = (() => {
       ctx.drawImage(source, x + size / 2 - g / 2, y + size / 2 - g / 2, g, g, -G / 2, -G / 2, G, G);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
-    return tf.browser.fromPixels(canvas).toFloat().div(127.5).sub(1);
+    // tf.tidy: the chain below makes throwaway tensors at each step (fromPixels, toFloat, div) - without this,
+    // only the final one a caller disposes, and the rest leak forever (confirmed: ~10 tensors/5MB leaked per
+    // scan() call without it, enough to crash the page after a handful of live chocolates)
+    return tf.tidy(() => tf.browser.fromPixels(canvas).toFloat().div(127.5).sub(1));
   }
   // Square-edge angle (same maths as training/align_lib.js): degrees to turn the picture counter-clockwise to square it up
   // Speed: worked out on a half-size copy (112 px): same accuracy (98-99% within 10°; 0.3° from full size on real close-ups), a quarter of the work
