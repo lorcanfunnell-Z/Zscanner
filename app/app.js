@@ -167,7 +167,9 @@
   async function startCamera() {
     if (!(await ensureModel())) return;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1920 } }, audio: false });
+      // advanced constraints are best-effort: a browser/device that doesn't support focusMode just ignores it,
+      // never errors - safe to always ask, though iOS Safari's own support for this is known to be unreliable
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1920 }, advanced: [{ focusMode: "continuous" }] }, audio: false });
     } catch (e) {
       noLiveCamera(e.name === "NotAllowedError"
         ? "Live scanning is not available here. Tap “Take a photo” to photograph your chocolate instead."
@@ -181,7 +183,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; lastScan = null;
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null;
     loop();
     requestTiltPermission();   // advisory sensor only — asked after the camera is already streaming, so its permission dialog can never queue in front of the camera one and delay the scan starting
   }
@@ -220,6 +222,7 @@
   let held = [], holdStart = 0;            // frames collected during the current hold
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
+  let firstClearSeen = 0;   // live on both pages: first frame that actually passed the quality gate (not just detected) - the deadline clock starts here, not at first detection, so an initial blurry/focus-hunting stretch doesn't eat into the budget
   let rejected = [];   // admin only: frames seen but skipped (too small/blurry/dark/glare), so the quality gates can be checked against real misses too
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
   function frameShot() {   // what the camera saw (centre square), small, for the test log
@@ -231,7 +234,9 @@
   function report(type, guess) {
     if (!DEBUG || !lastInfo) return;
     window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart),
-      seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null, trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
+      seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null,
+      clearMs: firstClearSeen ? Math.round(performance.now() - firstClearSeen) : null,   // time since the first frame good enough to actually use - compare with seenMs to see how much was lost to initial blur/focus-hunting
+      trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
@@ -245,7 +250,7 @@
     viewer.classList.add("locked");
     setTimeout(() => { stopCamera(); render(key, { scanned: true, vec, reinforcedAs }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
-  function resetHold(t) { held = []; holdStart = t; }
+  function resetHold(t) { held = []; holdStart = t; firstClearSeen = 0; }
 
   function loop() {
     if (!stream) return;
@@ -275,6 +280,7 @@
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
           p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, tilt: tiltAngle != null ? Math.round(tiltAngle) : null });
+        if (!firstClearSeen) firstClearSeen = t0;   // live on both pages - this frame already cleared the quality gate above, so the deadline clock starts counting from here
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
@@ -328,10 +334,14 @@
           : META.shellOf[topKey] === "milkwhite" ? (META.logic === "shell" || META.markOf[topKey] === markVote)
           : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
-        // test (3 Nov): past HARD_DEADLINE_MS since first seeing a chocolate, stop waiting for the normal bars
-        // (agree/printOk/logicOk/DECIDE/MARGIN) and just answer with whatever's currently the top guess.
-        const deadlineForced = !!firstSeen && (t0 - firstSeen) >= HARD_DEADLINE_MS && held.length >= 3;
-        if (DEBUG && firstSeen) $("#hint").textContent += ` | ${Math.max(0, Math.round((HARD_DEADLINE_MS - (t0 - firstSeen)) / 100) / 10)}s to deadline`;
+        // test (3 Nov): past HARD_DEADLINE_MS since the first frame that actually cleared the quality gate (not
+        // first detection - an initial blurry/focus-hunting stretch doesn't eat into this budget), stop waiting
+        // for the normal bars (agree/printOk/logicOk/DECIDE/MARGIN) and just answer with whatever's currently the
+        // top guess. Live on both pages - firstClearSeen is tracked unconditionally, not admin-only, which an
+        // earlier version of this got wrong (it depended on the admin-only firstSeen, so never fired for real
+        // clients on the live site at all).
+        const deadlineForced = !!firstClearSeen && (t0 - firstClearSeen) >= HARD_DEADLINE_MS && held.length >= 3;
+        if (DEBUG && firstClearSeen) $("#hint").textContent += ` | ${Math.max(0, Math.round((HARD_DEADLINE_MS - (t0 - firstClearSeen)) / 100) / 10)}s to deadline`;
         if ((agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) || deadlineForced) {
           // like Face ID folding a good unlock back into its template: at the highest confidence tier, add this
           // chocoprint to the gallery for the rest of this visit, so a second pass over the same box gets easier.
