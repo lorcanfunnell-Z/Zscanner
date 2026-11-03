@@ -2,7 +2,7 @@
 // Bump VERSION whenever a page/code file changes so phones pick up the new version.
 // Bump MODEL_VERSION only when a model file changes: models are big (several MB) and are loaded from the phone
 // after the first visit (cache first), so a second visit doesn't download them again.
-const VERSION = "scanner-v42";
+const VERSION = "scanner-v43";
 const MODEL_VERSION = "models-6.1.2";   // 29 Oct: gallery cleaned up (1395 -> 1393 references), see CLAUDE.md
 const isModel = url => /\/(model\d+\/|vendor\/tf\.min\.js|vendor\/mnv2\/)/.test(url) && !/meta\.json/.test(url);   // settings (meta.json) always fresh
 const FILES = [

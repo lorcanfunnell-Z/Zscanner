@@ -168,6 +168,7 @@
     setStatus(""); $("#suggest").hidden = true;
     held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; trace = []; rejected = []; lastScan = null;
     loop();
+    requestTiltPermission();   // advisory sensor only — asked after the camera is already streaming, so its permission dialog can never queue in front of the camera one and delay the scan starting
   }
 
   function stopCamera(label = "Scan another") {
@@ -358,7 +359,7 @@
     img.src = url;
   }
 
-  $("#camBtn").onclick = () => { if (canLive) requestTiltPermission(); canLive ? startCamera() : $("#photoInput").click(); };
+  $("#camBtn").onclick = () => canLive ? startCamera() : $("#photoInput").click();
   $("#stopBtn").onclick = () => { report("noanswer", null); stopCamera("Scan a chocolate"); };
   $("#photoBtn").onclick = () => $("#photoInput").click();
   $("#photoInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; fromPhoto(f); };
