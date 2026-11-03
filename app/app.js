@@ -143,6 +143,7 @@
   // ---------- Live camera ----------
   const video = $("#video"), viewer = $("#viewer");
   let stream = null, timer = null, lastSeen = 0;
+  let videoTrack = null, torchOn = false;   // admin-only flash toggle, see setupTorchButton() below
   let canLive = !!(navigator.mediaDevices?.getUserMedia) && window.isSecureContext;
   function noLiveCamera(msg) {
     canLive = false;
@@ -162,6 +163,8 @@
       return;
     }
     video.srcObject = stream; await video.play();
+    videoTrack = stream.getVideoTracks()[0];
+    setupTorchButton();
     viewer.hidden = false; viewer.classList.remove("locked");
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
@@ -173,8 +176,28 @@
 
   function stopCamera(label = "Scan another") {
     clearTimeout(timer); timer = null;
-    stream?.getTracks().forEach(t => t.stop()); stream = null;
+    if (torchOn) try { videoTrack?.applyConstraints({ advanced: [{ torch: false }] }); } catch (e) {}
+    stream?.getTracks().forEach(t => t.stop()); stream = null; videoTrack = null; torchOn = false;
+    $("#torchBtn").hidden = true;
     viewer.hidden = true; $(".actions").hidden = false; $("#camLabel").textContent = label;
+  }
+
+  // Admin-only test control: lets flash-vs-no-flash be compared directly, since a phone's Control Centre torch
+  // gets switched off the moment this page's own camera session starts (iOS treats them as competing camera
+  // sessions) - the only way to actually light the shot is via the stream's own track. Feature-detected per
+  // device; stays hidden for real clients and whenever torch isn't supported.
+  function setupTorchButton() {
+    const btn = $("#torchBtn");
+    torchOn = false; btn.textContent = "Flash: off"; btn.hidden = true;
+    if (window.ZADMIN !== true) return;
+    let supported = false;
+    try { supported = !!videoTrack?.getCapabilities?.().torch; } catch (e) {}
+    if (!supported) return;
+    btn.hidden = false;
+    btn.onclick = async () => {
+      try { await videoTrack.applyConstraints({ advanced: [{ torch: !torchOn }] }); torchOn = !torchOn; btn.textContent = `Flash: ${torchOn ? "on" : "off"}`; }
+      catch (e) { btn.textContent = "Flash: not supported"; }
+    };
   }
 
   // Live scanning: the person holds the camera over one chocolate for HOLD_MS. A line fills up around the box
