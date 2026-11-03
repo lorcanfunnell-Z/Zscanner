@@ -21,6 +21,7 @@
   const MIN_SIZE = 0.13;    // chocolate smaller than this share of the view: ask to move closer
   const MIN_LIGHT = 50;      // model 6: chocolate's brighter parts darker than this → too dark to read (tests 1-3: all such scans wrong)
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
+  const TILT_HINT_DEG = 25; // phone's own gyroscope: degrees away from lying flat before we nudge "hold it flatter" — a first guess, to refine once real sessions show what's helpful
   const IDK_AFTER_MS = 2000; // after the hold, this long without an answer → say what would help (live on both pages: model6's meta.json sets candidate:true for each)
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
@@ -121,6 +122,24 @@
     catch (e) { console.error(e); setStatus("The scanner could not start. Please choose your number below.", "err"); return false; }
   }
 
+  // ---------- Tilt sensor ----------
+  // The chocolate lies flat on a table, so the phone's own gyroscope tells us how far off-overhead the camera is
+  // being held — for free, with no guesswork from the picture itself (unlike the camera-tilt correction attempts
+  // that were tried and dropped, see CLAUDE.md). beta/gamma both sit near 0° when the phone lies flat, screen up,
+  // which is exactly how it is held to look straight down at a chocolate. Advisory only for now: it nudges the
+  // on-screen hint, it never blocks a frame or an answer on its own.
+  let tiltAngle = null, tiltAsked = false;
+  function onTilt(e) { if (e.beta != null && e.gamma != null) tiltAngle = Math.hypot(e.beta, e.gamma); }
+  function requestTiltPermission() {
+    if (tiltAsked) return; tiltAsked = true;
+    const DOE = window.DeviceOrientationEvent;
+    if (!DOE) return;
+    // iOS needs an explicit, user-gesture-triggered permission prompt (same pattern as camera/mic); everywhere
+    // else (Android, desktop) the sensor just starts reporting
+    if (typeof DOE.requestPermission === "function") DOE.requestPermission().then(s => { if (s === "granted") window.addEventListener("deviceorientation", onTilt); }).catch(() => {});
+    else window.addEventListener("deviceorientation", onTilt);
+  }
+
   // ---------- Live camera ----------
   const video = $("#video"), viewer = $("#viewer");
   let stream = null, timer = null, lastSeen = 0;
@@ -209,7 +228,7 @@
         if (DEBUG) {
           $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}%`;
           if (rejected.length < 400) rejected.push({ t: Math.round(t0 - scanStart), reason, sharp: Math.round(r.sharp), size: +r.box.size.toFixed(3),
-            light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null });
+            light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null });
         }
       } else if (r.found) {
         lastSeen = t0;
@@ -219,17 +238,18 @@
           if (Math.hypot(r.box.cx - mx, r.box.cy - my) > MOVE_LIMIT) resetHold(t0);
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
-          p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark });
+          p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, tilt: tiltAngle != null ? Math.round(tiltAngle) : null });
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
-            sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
+            sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });
         }
         const holdMs = META.holdMs ?? HOLD_MS;   // model 6: 0.4 s (replay: 3 frames already gave 0 wrong)
         held = held.filter((f, i) => t0 - f.t <= holdMs * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
         const progress = (t0 - holdStart) / holdMs;
         showMark(r, progress);
-        $("#hint").textContent = progress < 1 ? "Hold still over the chocolate" : "Reading the number…";
+        const tiltedNow = tiltAngle != null && tiltAngle > TILT_HINT_DEG;
+        $("#hint").textContent = progress < 1 ? (tiltedNow ? "Hold the phone flatter, straight above the number" : "Hold still over the chocolate") : "Reading the number…";
         // average every frame in the window. Keys come from every frame, not just the first: a custom (admin-added)
         // chocolate's print match can come and go frame to frame, so held[0] alone might not have every key that
         // appears later in the window — missing values default to 0 rather than producing NaN.
@@ -245,10 +265,12 @@
           mark: ["one", "two", "z"].sort((a, b) => mcount(b) - mcount(a))[0], frames: held.length, holdMs: Math.round(t0 - holdStart) };
         // "I don't know": held for a while but still not sure, so say what would help instead of guessing
         const stuck = !!META.candidate && progress >= 1 + IDK_AFTER_MS / holdMs, mean = f => held.reduce((s, h) => s + f(h), 0) / held.length;
-        const idk = !stuck ? "" : mean(h => h.size) < 0.2 ? "Hold a little closer" : mean(h => h.qsure) < 0.8 ? "Hold the phone straight above the number"
+        const idk = !stuck ? "" : mean(h => h.size) < 0.2 ? "Hold a little closer"
+          : mean(h => h.tilt ?? 0) > TILT_HINT_DEG ? "Hold the phone flatter, straight above the number"
+          : mean(h => h.qsure) < 0.8 ? "Hold the phone straight above the number"
           : mean(h => h.sharp) < 80 ? "Hold steady for a moment" : "Hold a little closer, straight above the number";
         if (idk) $("#hint").textContent = idk;
-        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)}`;
+        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)} | tilt ${tiltAngle != null ? Math.round(tiltAngle) + "°" : "–"}`;
         const markVote = lastInfo.mark;
         // rule "agree" (model 5): the classifier and the chocoprints, each voting over the held second, must name the same chocolate
         const vote = f => { const c = {}; held.forEach(h => { const k = f(h); if (k) c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
@@ -336,7 +358,7 @@
     img.src = url;
   }
 
-  $("#camBtn").onclick = () => canLive ? startCamera() : $("#photoInput").click();
+  $("#camBtn").onclick = () => { if (canLive) requestTiltPermission(); canLive ? startCamera() : $("#photoInput").click(); };
   $("#stopBtn").onclick = () => { report("noanswer", null); stopCamera("Scan a chocolate"); };
   $("#photoBtn").onclick = () => $("#photoInput").click();
   $("#photoInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; fromPhoto(f); };
