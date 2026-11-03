@@ -2,12 +2,13 @@
   "heldBack": [
     "test-4",
     "test-5",
-    "test-6"
+    "test-6",
+    "test-7"
   ],
   "inGallery": [
     "test-3",
     "2026-10-28",
     "2026-11-03"
   ],
-  "note": "test-4 and test-5 are still genuinely never-trained-on, but have now been used repeatedly to pick decision rules (E, then A) by eye - they're no longer a fresh check for that purpose, just for retraining. test-6 is the current fresh session for rule decisions; keep adding each new one here until it's deliberately folded into the gallery like test-3 was."
+  "note": "test-4 and test-5 are still genuinely never-trained-on, but have now been used repeatedly to pick decision rules (E, then A) by eye - they're no longer a fresh check for that purpose, just for retraining. test-7 (3 Nov afternoon, 27 labelled scans) is the current fresh session for rule decisions; keep adding each new one here until it's deliberately folded into the gallery like test-3 was. test-7's entry n=26 had its truth corrected from 21 to 22 in test-log.json/csv - a confirmed admin mis-tap, not a model issue (see CLAUDE.md, 3 Nov afternoon test)."
 }
