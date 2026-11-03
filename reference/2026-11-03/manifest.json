@@ -1,0 +1,10 @@
+{
+  "kind": "reference round",
+  "made": "2026-11-03T10:00:12.841Z",
+  "model": "model6",
+  "closeups": 16,
+  "byLight": {
+    "lamp": 8,
+    "window": 8
+  }
+}
