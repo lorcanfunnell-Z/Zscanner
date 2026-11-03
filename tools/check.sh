@@ -2,9 +2,15 @@
 # zScanner check: run before every push. One command for everything:
 #   1. every JavaScript file parses (no typos that would break the page)
 #   2. self-tests of the shared training pieces and the files the phone needs (seconds)
-#   3. the quality check for model 6 must match the saved baseline (training/baseline-model6.txt). If you changed
-#      the model or gallery ON PURPOSE and the new numbers are better, save them: tools/check.sh --update-baseline
-#   4. (optional, --browser) the client and admin pages open and identify chocolates in a headless browser
+#   3. the quality check for model 6 must match the saved baseline (training/baseline-model6.txt) - an older family
+#      of candidate rules from training/eval_combo.js, kept for comparing raw signal strength, NOT what the phone
+#      actually decides.
+#   4. the LIVE decision rule (rule E, training/trace_replay.py - exactly what the phone actually runs) must match
+#      its own saved baseline (training/baseline-ruleE.txt) on every held-back session listed in
+#      training/sessions.json. This is the one that actually reflects real answered/wrong behaviour.
+#   If you changed the model, gallery or decision logic ON PURPOSE and the new numbers are better, save both
+#   baselines: tools/check.sh --update-baseline
+#   5. (optional, --browser) the client and admin pages open and identify chocolates in a headless browser
 # Usage: tools/check.sh [--browser] [--update-baseline]
 cd "$(dirname "$0")/.."
 FAIL=0; say() { printf "\n== %s\n" "$1"; }
@@ -21,8 +27,20 @@ if [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ]; then echo "
 elif [ ! -f training/baseline-model6.txt ]; then echo "$NOW" > training/baseline-model6.txt; echo "  baseline saved (first run)";
 elif diff <(echo "$NOW") training/baseline-model6.txt >/dev/null; then echo "  ok    identical to baseline"; 
 else echo "  CHANGED from baseline:"; diff <(echo "$NOW") training/baseline-model6.txt | sed 's/^/    /' | head -20; FAIL=1; fi
+say "4. Live decision rule (rule E) vs baseline, every held-back session (about a minute)"
+HELD=$(python3 -c "import json;print(' '.join(json.load(open('training/sessions.json'))['heldBack']))")
+NOWE=""
+for S in $HELD; do
+  LINE=$(python3 training/trace_replay.py "tests/$S" new 2>/dev/null | head -1)
+  NOWE="$NOWE$S: $LINE
+"
+done
+if [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ]; then printf '%s' "$NOWE" > training/baseline-ruleE.txt; echo "  baseline updated";
+elif [ ! -f training/baseline-ruleE.txt ]; then printf '%s' "$NOWE" > training/baseline-ruleE.txt; echo "  baseline saved (first run)";
+elif diff <(printf '%s' "$NOWE") training/baseline-ruleE.txt >/dev/null; then echo "  ok    identical to baseline";
+else echo "  CHANGED from baseline:"; diff <(printf '%s' "$NOWE") training/baseline-ruleE.txt | sed 's/^/    /'; FAIL=1; fi
 if [ "$1" = "--browser" ] || [ "$2" = "--browser" ]; then
-  say "4. Browser smoke test (a few minutes)"
+  say "5. Browser smoke test (a few minutes)"
   (cd app && python3 -m http.server 8767 >/dev/null 2>&1 & echo $! > /tmp/zcheck-server.pid); sleep 1
   node tools/browser_smoke.js 2>/dev/null || FAIL=1
   kill "$(cat /tmp/zcheck-server.pid)" 2>/dev/null
