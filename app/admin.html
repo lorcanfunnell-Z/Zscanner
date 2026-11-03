@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>zScanner Admin</title>
   <meta name="robots" content="noindex, nofollow">
+  <!-- choc3d.js dynamically imports Three.js only after a chocolate is identified; its own addon modules import
+       "three" as a bare specifier internally, which needs this map present (no network cost on its own). -->
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
   <meta name="description" content="Scan the chocolate in your zChocolat gift to discover its recipe.">
     <meta name="theme-color" content="#000000">
   <link rel="icon" href="icons/icon-192.png">
@@ -117,6 +122,7 @@
   <script src="vendor/tf.min.js"></script>
   <script src="data/chocolates.js"></script>
   <script src="recognizer.js"></script>
+  <script src="choc3d.js"></script>
   <script src="app.js"></script>
   <script src="hooks-config.js"></script>
   <script src="hooks.js"></script>

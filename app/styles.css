@@ -86,6 +86,11 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;color:var(--ink);margin:0;text
 .card{display:flex;flex-direction:column;gap:22px}
 .card-photo{position:relative;background:#f1f0ed;aspect-ratio:1/1;overflow:hidden}
 .card-photo img{width:100%;height:100%;object-fit:cover}
+.choc3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.anatomy{display:flex;flex-direction:column;gap:6px;margin:0;font-size:13.5px}
+.anatomy dt{font:500 10.5px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.anatomy dd{margin:2px 0 0;display:flex;align-items:center;gap:8px;color:var(--text)}
+.anatomy dd i{width:12px;height:12px;flex:none;border-radius:50%;display:inline-block}
 .badge{position:absolute;top:14px;left:14px;background:var(--white);color:var(--ink);font:500 10px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;padding:8px 10px}
 .card-kicker{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .card h2{font-size:clamp(30px,8vw,38px);line-height:1.1}

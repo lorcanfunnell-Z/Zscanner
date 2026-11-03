@@ -23,6 +23,7 @@
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
   const TILT_HINT_DEG = 25; // phone's own gyroscope: degrees away from lying flat before we nudge "hold it flatter" — a first guess, to refine once real sessions show what's helpful
   const IDK_AFTER_MS = 2000; // after the hold, this long without an answer → say what would help (live on both pages: model6's meta.json sets candidate:true for each)
+  const HARD_DEADLINE_MS = 5000; // test (3 Nov): never let a scan run longer than this from first seeing a chocolate - past it, answer with the current best guess instead of continuing to wait (N20/N23 ran 42-104s with no answer at all before this)
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
@@ -66,10 +67,14 @@
         <div class="zrow">${["dark", "milk", "white"].map(t => `<button class="zbtn" type="button" data-z="${t}" aria-pressed="${"z" + t === key}"><span class="sw" style="background:${COUV[t].sw}"></span>${t}</button>`).join("")}</div>
       </div>` : "";
     const meta = [COUV[c.cv]?.label || "", ...(c.tags || [])].filter(Boolean).map(esc).join(" · ");
+    const anatomy = window.Choc3D?.anatomy(key);
+    const anatomyHtml = anatomy ? `
+        <dl class="anatomy">${anatomy.map(r => `<dt>${esc(r.label)}</dt><dd><i style="background:${r.color}"></i>${esc(r.text)}</dd>`).join("")}</dl>
+        <button class="btn btn-outline-dark" type="button" id="cutBtn" aria-pressed="false">Cut it open</button>` : "";
     $("#result").innerHTML = `
       <article class="card">
-        <div class="card-photo">
-          <img src="${photo(key)}" alt="${esc(c.name)}" onerror="this.onerror=null;this.src='images/${esc(key)}.jpg'">
+        <div class="card-photo" id="chocStage">
+          <img class="chocphoto" src="${photo(key)}" alt="${esc(c.name)}" onerror="this.onerror=null;this.src='images/${esc(key)}.jpg'">
           ${opts.example ? '<span class="badge">Example</span>' : ""}
         </div>
         <p class="eyebrow dark">${c.z ? "The signature Z chocolates" : c.custom ? "zChocolat" : "The numbered collection"}</p>
@@ -77,11 +82,18 @@
         ${zpick}
         <p class="desc">${esc(c.d)}</p>
         <p class="meta">${meta}</p>
+        ${anatomyHtml}
         <div class="card-actions">
           <a class="btn btn-dark" href="${utm(SHOP, key)}" target="_blank" rel="noopener">Shop this flavour</a>
         </div>
         ${opts.scanned ? `<p class="wrong">Not the right chocolate? <button type="button" id="fixBtn">Choose the number instead</button></p>` : ""}
       </article>`;
+    // 3D is a display enhancement only, loaded after the card above is already showing the static photo - if it
+    // can't load (no model for a custom chocolate, Three.js/WebGL unavailable) the photo just stays as it is.
+    if (anatomy) {
+      window.Choc3D.show($("#chocStage"), key).then(shown => { if (shown) $(".chocphoto").hidden = true; });
+      $("#cutBtn").onclick = () => $("#cutBtn").setAttribute("aria-pressed", String(window.Choc3D.toggleCut()));
+    }
     // the three Z chocolates share one gallery mark, so picking a different shell colour here wouldn't actually
     // change what's in the gallery (it would just remove and re-add the identical chocoprint) — nothing to reinforce
     document.querySelectorAll(".zbtn").forEach(b => b.onclick = () => render("z" + b.dataset.z, { ...opts, keepScroll: true }));
@@ -316,7 +328,11 @@
           : META.shellOf[topKey] === "milkwhite" ? (META.logic === "shell" || META.markOf[topKey] === markVote)
           : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
-        if (agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) {
+        // test (3 Nov): past HARD_DEADLINE_MS since first seeing a chocolate, stop waiting for the normal bars
+        // (agree/printOk/logicOk/DECIDE/MARGIN) and just answer with whatever's currently the top guess.
+        const deadlineForced = !!firstSeen && (t0 - firstSeen) >= HARD_DEADLINE_MS && held.length >= 3;
+        if (DEBUG && firstSeen) $("#hint").textContent += ` | ${Math.max(0, Math.round((HARD_DEADLINE_MS - (t0 - firstSeen)) / 100) / 10)}s to deadline`;
+        if ((agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) || deadlineForced) {
           // like Face ID folding a good unlock back into its template: at the highest confidence tier, add this
           // chocoprint to the gallery for the rest of this visit, so a second pass over the same box gets easier.
           // Not during admin test sessions (DEBUG) — later test scans must stand on their own, not benefit from
@@ -324,6 +340,7 @@
           // this specific reinforcement rather than just piling another one on top.
           const autoReinforced = !DEBUG && highestConfidence(bothAgree, topP) && !!r.print?.vec;
           if (autoReinforced) Recognizer.reinforce(topKey, r.print.vec);
+          lastInfo.forced = deadlineForced;
           answer(topKey, r.print?.vec, autoReinforced ? topKey : null); return;
         }
       } else {
