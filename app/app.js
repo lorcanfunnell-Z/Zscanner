@@ -140,16 +140,27 @@
   // that were tried and dropped, see CLAUDE.md). beta/gamma both sit near 0° when the phone lies flat, screen up,
   // which is exactly how it is held to look straight down at a chocolate. Advisory only for now: it nudges the
   // on-screen hint, it never blocks a frame or an answer on its own.
-  let tiltAngle = null, tiltAsked = false;
+  let tiltAngle = null, tiltGranted = false;
   function onTilt(e) { if (e.beta != null && e.gamma != null) tiltAngle = Math.hypot(e.beta, e.gamma); }
+  // 4 Nov: was "ask once per page load, ever" - found via real test sessions that zero tilt data was ever
+  // captured, because a single not-granted result (denied, dismissed, or some one-off glitch) permanently
+  // disabled the sensor for the whole session with no way back. Now retried on every new scan attempt instead
+  // of just once - safe to do even after a real, explicit "Don't Allow": iOS itself remembers that decision and
+  // resolves future requestPermission() calls instantly without showing the native prompt again, so a genuine
+  // denial never turns into repeated nagging. This only gives a second (or third, etc.) chance to the cases
+  // that weren't a deliberate, permanent no - a transient failure, a missed prompt, a timing glitch.
   function requestTiltPermission() {
-    if (tiltAsked) return; tiltAsked = true;
+    if (tiltGranted) return;   // already working this session - nothing to re-ask
     const DOE = window.DeviceOrientationEvent;
     if (!DOE) return;
     // iOS needs an explicit, user-gesture-triggered permission prompt (same pattern as camera/mic); everywhere
     // else (Android, desktop) the sensor just starts reporting
-    if (typeof DOE.requestPermission === "function") DOE.requestPermission().then(s => { if (s === "granted") window.addEventListener("deviceorientation", onTilt); }).catch(() => {});
-    else window.addEventListener("deviceorientation", onTilt);
+    if (typeof DOE.requestPermission === "function") {
+      DOE.requestPermission().then(s => { if (s === "granted") { tiltGranted = true; window.addEventListener("deviceorientation", onTilt); } }).catch(() => {});
+    } else {
+      tiltGranted = true;
+      window.addEventListener("deviceorientation", onTilt);
+    }
   }
 
   // ---------- Live camera ----------
