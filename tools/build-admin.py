@@ -39,6 +39,7 @@ h = h.replace('  <header class="masthead">', '''  <div class="adminbar">
     <button type="button" id="modeSpeed">Speed test</button>
     <button type="button" id="modeRef">Reference round</button>
     <button type="button" id="modeCam">Camera test</button>
+    <button type="button" id="modeManual">Manual label</button>
     <button type="button" id="modeLock">Lock</button>
   </div>
 
@@ -51,6 +52,7 @@ h = h.replace('  <script src="install.js"></script>', '''  <script src="vendor/j
   <script src="speedtest.js"></script>
   <script src="reference.js"></script>
   <script src="camtest.js"></script>
+  <script src="manuallabel.js"></script>
   <script src="admin.js"></script>''')
 open(os.path.join(ROOT, "admin.html"), "w", encoding="utf-8").write(h)
 print("admin.html built")

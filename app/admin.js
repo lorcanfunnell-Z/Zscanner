@@ -35,6 +35,7 @@
   document.getElementById("modeSpeed").onclick = () => window.ZSpeed && window.ZSpeed.open();
   document.getElementById("modeRef").onclick = () => window.ZReference && window.ZReference.open();
   document.getElementById("modeCam").onclick = () => window.ZCamTest && window.ZCamTest.open();
+  document.getElementById("modeManual").onclick = () => window.ZManualLabel && window.ZManualLabel.open();
   document.getElementById("modeLock").onclick = () => { try { localStorage.removeItem(KEY); } catch {} location.reload(); };
 })();
 
