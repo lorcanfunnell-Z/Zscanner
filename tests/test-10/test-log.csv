@@ -1,0 +1,4 @@
+scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s
+1,2026-11-04T15:28:02.491Z,"",answer,9,zmilk,false,9,91.5,7,4,milk,one,6,5.1,5.2
+2,2026-11-04T15:28:12.772Z,"",answer,9,zmilk,false,9,74,24,9.2,milk,one,5,5.1,5.2
+3,2026-11-04T15:28:22.821Z,"",answer,9,zmilk,false,9,80.7,7,9.7,milk,one,6,5.1,5.1
