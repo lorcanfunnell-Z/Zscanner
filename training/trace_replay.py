@@ -57,7 +57,8 @@ def run(rule, K=3, detail=False):
                 shell_ok = META["shellOf"].get(top) == "milkwhite" or vote("shell") == META["shellOf"].get(top)
                 ok = ok and shell_ok
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
-            if ok and tp >= .5 and tp - sp >= .2: said = top; at = f["t"] - held[0]["t"]; break
+            forced = rule.get("deadline") and f["t"] >= rule["deadline"] and len(win) >= 3   # test (3 Nov): hard cutoff, answer with the current top guess
+            if (ok and tp >= .5 and tp - sp >= .2) or forced: said = top; at = f["t"] - held[0]["t"]; break
         out.append((r["truth"], said, at if said else None))
     if detail: return out
     ans = [o for o in out if o[1]]; wrong = [o for o in ans if o[1] != o[0]]
@@ -80,7 +81,8 @@ if len(sys.argv) > 2 and sys.argv[2] == "new":
                        ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
                        ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
                        ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
-                       ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45})]:
+                       ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45}),
+                       ("E + 5s hard deadline (3 Nov test)", {**E, "deadline": 5000})]:
         print(f"{name:45s} {run(rule)}")
     sys.exit()
 
