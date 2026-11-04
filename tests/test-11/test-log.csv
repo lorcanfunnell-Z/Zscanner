@@ -1,0 +1,7 @@
+scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s
+1,2026-11-04T15:45:52.555Z,"",answer,9,zmilk,false,9,56.2,zwhite,38.7,milk,one,6,5.1,5.2
+2,2026-11-04T15:46:07.194Z,"",answer,zwhite,zwhite,true,zwhite,52,9,46,milk,one,6,5.0,5.3
+3,2026-11-04T15:46:22.352Z,"",answer,9,zdark,false,9,28.1,zwhite,26,milk,one,6,5.1,5.4
+4,2026-11-04T15:46:40.695Z,"",answer,9,0,false,9,90.3,7,6.5,milk,one,6,5.1,5.6
+5,2026-11-04T15:46:54.749Z,"",answer,9,10,false,9,42.5,5,25.4,milk,one,6,5.1,5.2
+6,2026-11-04T15:47:10.025Z,"",answer,zwhite,,,zwhite,81.3,24,6.6,white,z,6,5.0,5.1

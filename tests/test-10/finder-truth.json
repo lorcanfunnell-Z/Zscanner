@@ -1,0 +1,6 @@
+{
+  "_comment": "Hand-labelled ground-truth boxes for camera/zmilk/scanN.jpg (arm's length, 60-90cm), [x0,y0,x1,y1] fractions of the 320x320 square. All 3 of the live finder's own boxes here were wrong (locked onto the laptop keyboard) - hand-measured by eye from the actual photos, rough but visually checked.",
+  "zmilk/scan1.jpg": [0.464, 0.630, 0.573, 0.729],
+  "zmilk/scan2.jpg": [0.458, 0.573, 0.563, 0.677],
+  "zmilk/scan3.jpg": [0.380, 0.448, 0.458, 0.531]
+}

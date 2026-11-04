@@ -1,0 +1,9 @@
+{
+  "_comment": "Hand-labelled ground-truth boxes for the camera/*.jpg frames in this session, measured by eye from the actual photos (NOT the finder's own output, which is wrong here - that's the whole point of this session). Format matches training-photos/boxes.json: [x0,y0,x1,y1] as fractions of the 320x320 camera square, or null for no chocolate present. Rough measurement (hand-cropped and visually checked once), not pixel-perfect - good enough to teach the finder roughly where/how big, not for precise evaluation.",
+  "zmilk/scan1.jpg": [0.419, 0.609, 0.509, 0.697],
+  "zwhite/scan2.jpg": [0.434, 0.590, 0.492, 0.648],
+  "zdark/scan3.jpg": [0.391, 0.555, 0.461, 0.617],
+  "0/scan4.jpg": [0.418, 0.605, 0.500, 0.680],
+  "10/scan5.jpg": [0.379, 0.574, 0.461, 0.625],
+  "unlabelled/scan6.jpg": null
+}
