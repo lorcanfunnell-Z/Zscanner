@@ -34,6 +34,7 @@
   document.getElementById("modeAdd").onclick = () => window.ZAddChoc && window.ZAddChoc.open();
   document.getElementById("modeSpeed").onclick = () => window.ZSpeed && window.ZSpeed.open();
   document.getElementById("modeRef").onclick = () => window.ZReference && window.ZReference.open();
+  document.getElementById("modeCam").onclick = () => window.ZCamTest && window.ZCamTest.open();
   document.getElementById("modeLock").onclick = () => { try { localStorage.removeItem(KEY); } catch {} location.reload(); };
 })();
 
