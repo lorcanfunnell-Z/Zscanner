@@ -1,6 +1,6 @@
 {
-  "_comment": "Hand-labelled ground-truth boxes for camera/zmilk/scanN.jpg (arm's length, 60-90cm), [x0,y0,x1,y1] fractions of the 320x320 square. All 3 of the live finder's own boxes here were wrong (locked onto the laptop keyboard) - hand-measured by eye from the actual photos, rough but visually checked.",
-  "zmilk/scan1.jpg": [0.464, 0.630, 0.573, 0.729],
-  "zmilk/scan2.jpg": [0.458, 0.573, 0.563, 0.677],
-  "zmilk/scan3.jpg": [0.380, 0.448, 0.458, 0.531]
+  "_comment": "Ground-truth boxes for camera/zmilk/scanN.jpg (arm's length, 60-90cm), [x0,y0,x1,y1] fractions of the 320x320 square. All 3 of the live finder's own boxes here were wrong (locked onto the laptop keyboard), so these were hand-measured. RE-MEASURED 12 Nov 2026, before any new finder was scored against them (originals kept in experiments/finder-truth-before-2026-11-12/test-10.json): scan1's original box [0.464,0.630,0.573,0.729] sat on the napkin BELOW the chocolate and did not touch it at all; scan2's [0.458,0.573,0.563,0.677] was about twice the chocolate's size, so even a perfect box would have scored under the 30% overlap finder_eval.js counts as a hit; scan3's [0.380,0.448,0.458,0.531] was loose. Each was re-measured automatically from the photo (the darkest connected blob inside the old box, the same method for every frame in test-9/10/11) and checked by eye on a zoomed coordinate grid.",
+  "zmilk/scan1.jpg": [0.466, 0.528, 0.541, 0.608],
+  "zmilk/scan2.jpg": [0.466, 0.578, 0.525, 0.641],
+  "zmilk/scan3.jpg": [0.384, 0.459, 0.434, 0.512]
 }

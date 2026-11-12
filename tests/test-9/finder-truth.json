@@ -1,12 +1,12 @@
 {
-  "_comment": "Hand-labelled ground-truth boxes for camera/zmilk/scanN.jpg, [x0,y0,x1,y1] fractions of the 320x320 square. scan2/6/8 reuse the live finder's own box from that scan's trace - visually confirmed correct at the time (see CLAUDE.md, 4 Nov distance findings). scan1/3/4/5/7/9 are hand-measured by eye, since the finder's own box there is wrong (the whole point of this dataset) - rough but visually checked, not pixel-perfect.",
-  "zmilk/scan1.jpg": [0.448, 0.573, 0.573, 0.698],
-  "zmilk/scan2.jpg": [0.282, 0.364, 0.548, 0.630],
-  "zmilk/scan3.jpg": [0.484, 0.484, 0.583, 0.583],
-  "zmilk/scan4.jpg": [0.469, 0.422, 0.583, 0.531],
-  "zmilk/scan5.jpg": [0.4375, 0.599, 0.568, 0.729],
-  "zmilk/scan6.jpg": [0.3575, 0.2465, 0.6185, 0.5075],
-  "zmilk/scan7.jpg": [0.422, 0.464, 0.578, 0.625],
-  "zmilk/scan8.jpg": [0.360, 0.336, 0.618, 0.594],
-  "zmilk/scan9.jpg": [0.495, 0.547, 0.604, 0.646]
+  "_comment": "Ground-truth boxes for camera/zmilk/scanN.jpg, [x0,y0,x1,y1] fractions of the 320x320 square. RE-MEASURED 12 Nov 2026, before any new finder was scored against them: the original boxes (kept in experiments/finder-truth-before-2026-11-12/test-9.json) were rough enough that a PERFECTLY placed box could score near or below the 30% overlap that training/lib/finder_eval.js counts as a hit - scan2/6/8 had been copied from the old finder's own output and sat high and left of the chocolate, and scan4 covered only its top half. Every chocolate was re-measured automatically from the photo (the darkest connected blob inside the old box, the same method for every frame in test-9/10/11) and each result checked by eye on a zoomed coordinate grid. Original values: scan1 [0.448,0.573,0.573,0.698], scan2 [0.282,0.364,0.548,0.630], scan3 [0.484,0.484,0.583,0.583], scan4 [0.469,0.422,0.583,0.531], scan5 [0.4375,0.599,0.568,0.729], scan6 [0.3575,0.2465,0.6185,0.5075], scan7 [0.422,0.464,0.578,0.625], scan8 [0.360,0.336,0.618,0.594], scan9 [0.495,0.547,0.604,0.646].",
+  "zmilk/scan1.jpg": [0.462, 0.575, 0.575, 0.697],
+  "zmilk/scan2.jpg": [0.350, 0.481, 0.569, 0.703],
+  "zmilk/scan3.jpg": [0.491, 0.491, 0.572, 0.578],
+  "zmilk/scan4.jpg": [0.450, 0.456, 0.562, 0.575],
+  "zmilk/scan5.jpg": [0.441, 0.603, 0.575, 0.738],
+  "zmilk/scan6.jpg": [0.394, 0.366, 0.619, 0.603],
+  "zmilk/scan7.jpg": [0.431, 0.472, 0.581, 0.631],
+  "zmilk/scan8.jpg": [0.400, 0.456, 0.600, 0.666],
+  "zmilk/scan9.jpg": [0.500, 0.547, 0.578, 0.631]
 }

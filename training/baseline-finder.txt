@@ -5,27 +5,27 @@ finder: app/model6/finder/model.json
 "box on the chocolate" means at least 30% overlap with the hand-measured box AND the model saying a chocolate is there.
 
 --- distance / clutter sessions (hand-labelled, never trained on) ---
-test-9: box on the chocolate 3/9 (33%), centre inside it 8/9 (89%), said one was there 9/9 (100%), mean overlap 0.20, centre off by 0.066
-test-11: box on the chocolate 0/5 (0%), centre inside it 0/5 (0%), said one was there 5/5 (100%), mean overlap 0.02, centre off by 0.177, correctly said "nothing" 0/1 (0%)
-test-10: box on the chocolate 0/3 (0%), centre inside it 0/3 (0%), said one was there 3/3 (100%), mean overlap 0.03, centre off by 0.200
+test-9: box on the chocolate 3/9 (33%), centre inside it 8/9 (89%), said one was there 9/9 (100%), mean overlap 0.27, centre off by 0.033
+test-11: box on the chocolate 0/5 (0%), centre inside it 0/5 (0%), said one was there 5/5 (100%), mean overlap 0.01, centre off by 0.161, correctly said "nothing" 0/1 (0%)
+test-10: box on the chocolate 0/3 (0%), centre inside it 0/3 (0%), said one was there 3/3 (100%), mean overlap 0.02, centre off by 0.160
 all three together: box on the chocolate 3/17 (18%), correctly said "nothing" 0/1
 
 --- held-back real close-ups (last quarter of each recording) ---
 339 photos: box on the chocolate 325/327 (99%), centre inside it 326/327 (100%), said one was there 327/327 (100%), mean overlap 0.78, centre off by 0.035, correctly said "nothing" 12/12 (100%)
 
 --- distance frames it got wrong ---
-  test-9 zmilk/scan1.jpg: box only 8% overlapping the chocolate, but still 100% sure
-  test-9 zmilk/scan3.jpg: box only 6% overlapping the chocolate, but still 100% sure
-  test-9 zmilk/scan4.jpg: box only 7% overlapping the chocolate, but still 100% sure
+  test-9 zmilk/scan1.jpg: box only 7% overlapping the chocolate, but still 100% sure
+  test-9 zmilk/scan3.jpg: box only 4% overlapping the chocolate, but still 100% sure
+  test-9 zmilk/scan4.jpg: box only 8% overlapping the chocolate, but still 100% sure
   test-9 zmilk/scan5.jpg: box only 12% overlapping the chocolate, but still 100% sure
-  test-9 zmilk/scan7.jpg: box only 24% overlapping the chocolate, but still 100% sure
-  test-9 zmilk/scan9.jpg: box only 6% overlapping the chocolate, but still 100% sure
-  test-11 zmilk/scan1.jpg: box only 2% overlapping the chocolate, but still 100% sure
+  test-9 zmilk/scan7.jpg: box only 23% overlapping the chocolate, but still 100% sure
+  test-9 zmilk/scan9.jpg: box only 4% overlapping the chocolate, but still 100% sure
+  test-11 zmilk/scan1.jpg: box nowhere near the chocolate, but still 100% sure
   test-11 zwhite/scan2.jpg: box nowhere near the chocolate, but still 99% sure
-  test-11 zdark/scan3.jpg: box only 2% overlapping the chocolate, but still 100% sure
-  test-11 0/scan4.jpg: box only 3% overlapping the chocolate, but still 99% sure
-  test-11 10/scan5.jpg: box only 2% overlapping the chocolate, but still 99% sure
+  test-11 zdark/scan3.jpg: box nowhere near the chocolate, but still 100% sure
+  test-11 0/scan4.jpg: box nowhere near the chocolate, but still 99% sure
+  test-11 10/scan5.jpg: box nowhere near the chocolate, but still 99% sure
   test-11 unlabelled/scan6.jpg: said a chocolate is here (99%) when the frame has none
-  test-10 zmilk/scan1.jpg: box nowhere near the chocolate, but still 100% sure
-  test-10 zmilk/scan2.jpg: box only 3% overlapping the chocolate, but still 100% sure
-  test-10 zmilk/scan3.jpg: box only 5% overlapping the chocolate, but still 100% sure
+  test-10 zmilk/scan1.jpg: box only 3% overlapping the chocolate, but still 100% sure
+  test-10 zmilk/scan2.jpg: box nowhere near the chocolate, but still 100% sure
+  test-10 zmilk/scan3.jpg: box nowhere near the chocolate, but still 100% sure

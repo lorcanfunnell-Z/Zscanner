@@ -1,9 +1,9 @@
 {
-  "_comment": "Hand-labelled ground-truth boxes for the camera/*.jpg frames in this session, measured by eye from the actual photos (NOT the finder's own output, which is wrong here - that's the whole point of this session). Format matches training-photos/boxes.json: [x0,y0,x1,y1] as fractions of the 320x320 camera square, or null for no chocolate present. Rough measurement (hand-cropped and visually checked once), not pixel-perfect - good enough to teach the finder roughly where/how big, not for precise evaluation.",
-  "zmilk/scan1.jpg": [0.419, 0.609, 0.509, 0.697],
-  "zwhite/scan2.jpg": [0.434, 0.590, 0.492, 0.648],
-  "zdark/scan3.jpg": [0.391, 0.555, 0.461, 0.617],
-  "0/scan4.jpg": [0.418, 0.605, 0.500, 0.680],
-  "10/scan5.jpg": [0.379, 0.574, 0.461, 0.625],
+  "_comment": "Ground-truth boxes for the camera/*.jpg frames in this session, [x0,y0,x1,y1] as fractions of the 320x320 camera square, or null for no chocolate present (same format as training-photos/boxes.json). NOT the finder's own output, which is wrong here - that is the whole point of this session. RE-MEASURED 12 Nov 2026, before any new finder was scored against them (originals kept in experiments/finder-truth-before-2026-11-12/test-11.json): the original hand-drawn boxes were roughly twice the chocolate's size in four of the five frames, which at this distance meant a PERFECTLY placed box would score around 20-25% overlap - below the 30% that training/lib/finder_eval.js counts as a hit. Each was re-measured automatically from the photo (the darkest connected blob inside the old box, or the yellowest for zwhite, the same method for every frame in test-9/10/11) and checked by eye on a zoomed coordinate grid. Original values: zmilk/scan1 [0.419,0.609,0.509,0.697], zwhite/scan2 [0.434,0.590,0.492,0.648], zdark/scan3 [0.391,0.555,0.461,0.617], 0/scan4 [0.418,0.605,0.500,0.680], 10/scan5 [0.379,0.574,0.461,0.625].",
+  "zmilk/scan1.jpg": [0.419, 0.619, 0.459, 0.662],
+  "zwhite/scan2.jpg": [0.431, 0.588, 0.469, 0.625],
+  "zdark/scan3.jpg": [0.403, 0.538, 0.441, 0.578],
+  "0/scan4.jpg": [0.425, 0.616, 0.462, 0.656],
+  "10/scan5.jpg": [0.412, 0.562, 0.450, 0.600],
   "unlabelled/scan6.jpg": null
 }
