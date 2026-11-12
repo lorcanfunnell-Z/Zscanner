@@ -5,6 +5,7 @@
   "inputSize": 224,
   "backbone": "app/vendor/mnv2/model.json",
   "photos": "training-photos",
+  "photosWide": "training-photos-wide",
   "synth": "training-synth",
   "tests": "tests",
   "sessions": "training/sessions.json",

@@ -7,41 +7,57 @@
 // The finder looks at the WHOLE camera square (not a close-up) and says: is there a chocolate, and where
 // (obj: 0..1 sigmoid, box: [cx,cy,size] 0..1 sigmoid, all fractions of the square it was shown).
 //
-// Two kinds of training photo:
+// Three kinds of training photo:
 //   - real training-photos (via lib/data.js's loadData): a close-up around the chocolate, box in CLOSE-UP fractions.
 //     Collect-mode close-ups are ~85% of the camera square, so finderCrop() (lib/crops.js) zooms back OUT to
 //     simulate the whole square the finder actually sees, and the box target is recomputed for that zoomed-out crop.
-//   - cutpaste composites (tools/cutpaste_finder.js): already a whole 640x640 "camera view" with the chocolate
-//     pasted on a real, non-white-card background, box already in WHOLE-FRAME fractions - no zoom-out needed.
-// Both kinds also get an "aim away" augmentation (train2.js's own idea, kept): sometimes crop away from the known
+//   - REAL whole-frame photos (training-photos-wide/, filed by tools/ingest_manual_labels.js from the phone's
+//     "Manual label" admin tool): a whole camera square with the box drawn on it by hand, box already in
+//     WHOLE-FRAME fractions - no zoom-out. These are the ones that matter for the distance/clutter problem,
+//     because they are the only pictures in the project taken further back, off the white card, or with real
+//     clutter in them (CLAUDE.md, "Reading from further away").
+//   - cutpaste composites (tools/cutpaste_finder.js): the synthetic stand-in for the above, same whole-frame
+//     shape. Tried at demo scale on 9 Nov and rejected - off by default now that real photos are possible.
+// All kinds also get an "aim away" augmentation (train2.js's own idea, kept): sometimes crop away from the known
 // chocolate entirely, so the finder also learns "no chocolate here" from an otherwise-positive photo.
 //
 // Usage:  node training/train_finder.js                      (needs Node 20 for @tensorflow/tfjs-node - see
 //                                                               HANDOVER.md "Environment": PATH="$HOME/.local/node20/bin:$PATH")
-// Switches: EPOCHS_F=10  CUTPASTE=experiments/cutpaste-finder (set "" to disable)  OUT=experiments/finder-new  RESUME=1
+// Switches: EPOCHS_F=10  WIDE=training-photos-wide (set "" to disable)  OUT=experiments/finder-new  RESUME=1
+//           WIDE_REPEAT=4 (how many times each real whole-frame photo is seen per round - there will be far
+//                          fewer of them than close-ups, and they are the ones carrying the new information)
+//           CUTPASTE="" (the rejected synthetic batch; set a path to put it back in)
 //           COMPARE=app/model6/finder/model.json (set "" to skip the old-vs-new eval at the end)
-const { fs, path, tf, ROOT, at, between, rnd, shuffle, toTensor } = require("./lib/common.js");
+const { fs, path, tf, ROOT, CONFIG, at, between, rnd, shuffle, toTensor } = require("./lib/common.js");
 const { view, jitter } = require("./lib/view.js");
 const { finderCrop } = require("./lib/crops.js");
 const { loadData } = require("./lib/data.js");
 const { backbone, heads, saveRound, resumeRound } = require("./lib/models.js");
-const flag = (k, d) => process.env[k] === undefined ? d : process.env[k] === "1";
+const { evalWideSessions, evalCloseups, fmt } = require("./lib/finder_eval.js");
 const OUT = path.resolve(process.env.OUT || at("experiments/finder-new")), EPOCHS_F = +(process.env.EPOCHS_F || 10), BATCH = 32;
-const CUTPASTE = process.env.CUTPASTE === "" ? null : path.resolve(process.env.CUTPASTE || at("experiments/cutpaste-finder"));
+const WIDE = process.env.WIDE === "" ? null : path.resolve(process.env.WIDE || at(CONFIG.photosWide));
+const WIDE_REPEAT = +(process.env.WIDE_REPEAT || 4);
+const CUTPASTE = process.env.CUTPASTE ? path.resolve(process.env.CUTPASTE) : null;
 const COMPARE = process.env.COMPARE === "" ? null : path.resolve(process.env.COMPARE || at("app/model6/finder/model.json"));
 
-// ---- data: real training-photos (close-ups, needing the finderCrop zoom-out) + cutpaste composites (already
-// whole-frame, box as-is) ----
-function loadCutpaste(dir) {
+// ---- data ----
+// Whole-frame photos, real or synthetic: a boxes.json of <chocolate>/<file> -> [x0,y0,x1,y1] or null, with the
+// box already in fractions of the whole frame. `full: true` tells makeBatch not to zoom out.
+function loadWhole(dir, kind) {
   const bp = dir && path.join(dir, "boxes.json");
-  if (!bp || !fs.existsSync(bp)) { console.log(dir ? `no cutpaste batch found at ${path.relative(ROOT, dir)} - training on real photos only` : "CUTPASTE disabled - training on real photos only"); return []; }
+  if (!bp || !fs.existsSync(bp)) return [];
   const boxes = JSON.parse(fs.readFileSync(bp));
-  return Object.entries(boxes).map(([rel, box]) => ({ file: path.join(dir, rel), cls: "cutpaste", box, full: true, name: rel }));
+  return Object.entries(boxes).filter(([, b]) => b !== "skip")
+    .map(([rel, box]) => ({ file: path.join(dir, rel), cls: rel.split("/")[0], box, full: true, kind, name: rel }));
 }
 const { train: realTrain, test: realTest } = loadData({ synth: false, tests: false });
-const cutpaste = loadCutpaste(CUTPASTE);
-console.log(`cutpaste composites: ${cutpaste.length} (${cutpaste.filter(a => a.box).length} with a chocolate, ${cutpaste.filter(a => !a.box).length} pure background)`);
+const wide = loadWhole(WIDE, "wide"), cutpaste = loadWhole(CUTPASTE, "cutpaste");
+if (!WIDE) console.log("WIDE disabled - no real whole-frame photos in this run");
+else if (!wide.length) console.log(`no real whole-frame photos yet at ${path.relative(ROOT, WIDE)} - see training/finder-capture-brief.md for what to shoot, then tools/ingest_manual_labels.js`);
+else console.log(`real whole-frame photos: ${wide.length} (${wide.filter(a => a.box).length} with a chocolate, ${wide.filter(a => !a.box).length} "Nothing" shots), each seen ${WIDE_REPEAT}× per round`);
+if (cutpaste.length) console.log(`cutpaste composites: ${cutpaste.length} (the 9 Nov approach, rejected - only in this run because CUTPASTE was set)`);
 const items = [...realTrain, ...cutpaste];   // realTest stays untouched - the held-back real-photo eval at the end
+for (let i = 0; i < WIDE_REPEAT; i++) items.push(...wide);
 
 // crop window [cx,cy,size] (fractions of the SOURCE file) the finder is shown, for one item
 function cropFor(a, aug) { return a.full ? [0.5 + (aug ? between(-.15, .15) : 0), 0.5 + (aug ? between(-.15, .15) : 0), aug ? between(.8, 1.3) : 1] : finderCrop(a, aug); }
@@ -65,48 +81,9 @@ async function makeBatch(batch, aug) {
   return { x: toTensor(await Promise.all(bufs)), y: [tf.tensor2d(yo), tf.tensor2d(yb)] };
 }
 
-// ---- eval: real held-back close-ups (loadData's own 25% split) + the hand-labelled distance/clutter sessions
-// (tests/test-9/10/11 - never trained on, see CLAUDE.md "Reading from further away") ----
-async function evalCloseups(finder, testItems) {
-  let hit = 0, n = 0, noneOk = 0, noneN = 0, errSum = 0, errN = 0;
-  for (let i = 0; i < testItems.length; i += 32) {
-    const b = testItems.slice(i, i + 32);
-    const x = toTensor(await Promise.all(b.map(a => { const [cx, cy, z] = finderCrop(a, false); return view(a.file, cx, cy, z); })));
-    const [po, pb] = tf.tidy(() => finder.predict(x)); const O = po.arraySync(), B = pb.arraySync(); tf.dispose([x, po, pb]);
-    b.forEach((a, k) => {
-      if (!a.box) { noneN++; if (O[k][0] < .5) noneOk++; return; }
-      n++; if (O[k][0] >= .5) hit++;
-      const [x0, y0, x1, y1] = a.box, z = 1 / 0.85, tx = ((x0 + x1) / 2 - (.5 - z / 2)) / z, ty = ((y0 + y1) / 2 - (.5 - z / 2)) / z;
-      errSum += Math.hypot(B[k][0] - tx, B[k][1] - ty); errN++;
-    });
-  }
-  return { hitRate: hit / Math.max(1, n), n, noneRate: noneOk / Math.max(1, noneN), noneN, centreErr: errSum / Math.max(1, errN) };
-}
-async function evalDistanceSessions(finder, sessions) {
-  const out = {};
-  for (const s of sessions) {
-    const dir = at(`tests/${s}`), truthFile = path.join(dir, "finder-truth.json");
-    if (!fs.existsSync(truthFile)) continue;
-    const truth = JSON.parse(fs.readFileSync(truthFile));
-    let hit = 0, n = 0, noneOk = 0, noneN = 0, errSum = 0, errN = 0;
-    const entries = Object.entries(truth).filter(([k]) => !k.startsWith("_"));
-    for (let i = 0; i < entries.length; i += 32) {
-      const b = entries.slice(i, i + 32);
-      const x = toTensor(await Promise.all(b.map(([rel]) => view(path.join(dir, "camera", rel), .5, .5, 1))));
-      const [po, pb] = tf.tidy(() => finder.predict(x)); const O = po.arraySync(), B = pb.arraySync(); tf.dispose([x, po, pb]);
-      b.forEach(([rel, box], k) => {
-        if (!box) { noneN++; if (O[k][0] < .5) noneOk++; return; }
-        n++; if (O[k][0] >= .5) hit++;
-        const [x0, y0, x1, y1] = box, tx = (x0 + x1) / 2, ty = (y0 + y1) / 2;
-        errSum += Math.hypot(B[k][0] - tx, B[k][1] - ty); errN++;
-      });
-    }
-    out[s] = { hitRate: hit / Math.max(1, n), n, noneRate: noneOk / Math.max(1, noneN), noneN, centreErr: errSum / Math.max(1, errN) };
-  }
-  return out;
-}
-function fmt(r) { return `found chocolate ${(100 * r.hitRate).toFixed(0)}% of ${r.n}, centre error ${r.centreErr.toFixed(3)}` + (r.noneN ? `, correctly said "none" ${(100 * r.noneRate).toFixed(0)}% of ${r.noneN}` : ""); }
-
+// ---- eval: the shared scorer (lib/finder_eval.js), the same one training/eval_finder.js uses on its own, so
+// a retrain's numbers can be compared straight against training/baseline-finder.txt. It scores where the BOX
+// lands, not how confident the model sounds - see that file's header for why that distinction is the point. ----
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const finder = heads(await backbone(), [["obj", 1, "sigmoid"], ["box", 3, "sigmoid"]]);
@@ -134,18 +111,34 @@ function fmt(r) { return `found chocolate ${(100 * r.hitRate).toFixed(0)}% of ${
   await finder.save("file://" + path.join(OUT, "finder"));
   console.log(`\nsaved to ${path.relative(ROOT, OUT)}/finder (NOT app/model6 - nothing the live app loads was touched)`);
 
-  console.log(`\n--- evaluating the new finder (never trained on any of this) ---`);
-  const closeups = await evalCloseups(finder, realTest);
-  console.log(`real held-back close-ups (${realTest.length} photos, last 25% of each recording): ${fmt(closeups)}`);
-  const distance = await evalDistanceSessions(finder, ["test-9", "test-10", "test-11"]);
-  for (const [s, r] of Object.entries(distance)) console.log(`${s} (distance/clutter, hand-labelled, never trained on): ${fmt(r)}`);
+  const SESSIONS = ["test-9", "test-11", "test-10"];
+  const score = async (m) => ({ close: await evalCloseups(m, realTest), wide: await evalWideSessions(m, SESSIONS) });
+  const report = (label, r) => {
+    console.log(`\n${label}`);
+    console.log(`  held-back close-ups (${realTest.length} photos): ${fmt(r.close)}`);
+    for (const s of SESSIONS) if (r.wide[s]) console.log(`  ${s} (distance/clutter, hand-labelled): ${fmt(r.wide[s])}`);
+    const on = SESSIONS.reduce((a, s) => a + (r.wide[s]?.onTarget || 0), 0), n = SESSIONS.reduce((a, s) => a + (r.wide[s]?.n || 0), 0);
+    console.log(`  all three distance sessions: box on the chocolate ${on}/${n}${n ? ` (${Math.round(100 * on / n)}%)` : ""}`);
+    return { on, n };
+  };
+
+  const neu = await score(finder);
+  const newTotal = report("--- the NEW finder (never trained on any of this) ---", neu);
 
   if (COMPARE && fs.existsSync(COMPARE)) {
-    console.log(`\n--- same eval, the CURRENT live finder (${path.relative(ROOT, COMPARE)}), for an old-vs-new comparison ---`);
     const old = await tf.loadLayersModel("file://" + COMPARE);
-    console.log(`real held-back close-ups: ${fmt(await evalCloseups(old, realTest))}`);
-    const oldDistance = await evalDistanceSessions(old, ["test-9", "test-10", "test-11"]);
-    for (const [s, r] of Object.entries(oldDistance)) console.log(`${s}: ${fmt(r)}`);
-    old.dispose();
+    const oldScore = await score(old); old.dispose();
+    const oldTotal = report(`--- the CURRENT live finder (${path.relative(ROOT, COMPARE)}), for comparison ---`, oldScore);
+    // The project's own rule: a change is only kept if it doesn't make a held-back result worse. The close-ups
+    // matter as much as the distance sessions here - the finder is already 99% on them, and that must not be
+    // traded away for distance (exactly how both oblique-angle retrains failed, see CLAUDE.md 3f / 3f-ii).
+    const dist = `distance sessions ${oldTotal.on}/${oldTotal.n} -> ${newTotal.on}/${newTotal.n}`;
+    const close = `held-back close-ups ${oldScore.close.onTarget}/${oldScore.close.n} -> ${neu.close.onTarget}/${neu.close.n}`;
+    const better = newTotal.on > oldTotal.on, keptClose = neu.close.onTarget >= oldScore.close.onTarget;
+    console.log(`\nold vs new: ${dist}, ${close}`);
+    console.log(better && keptClose ? "A real improvement: better at distance without losing close-ups. Worth keeping - fair-test it properly next."
+      : better ? "Better at distance but WORSE on close-ups - that is the trade the project's own rule says not to take."
+      : keptClose ? "No better at distance. Per the project's own rule, this doesn't go in."
+      : "Worse on both. This doesn't go in.");
   } else if (COMPARE) console.log(`\n(no old finder found at ${path.relative(ROOT, COMPARE)} to compare against)`);
 })().catch(e => { console.error(e); process.exit(1); });
