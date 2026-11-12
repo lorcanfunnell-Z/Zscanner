@@ -18,7 +18,9 @@ say "1. JavaScript parses"
 for f in app/*.js training/*.js training/lib/*.js tools/*.js; do node --check "$f" 2>/dev/null || { echo "  FAIL  $f"; FAIL=1; }; done
 [ $FAIL = 0 ] && echo "  ok    all files"
 say "2. Self-tests"
-node training/selftest.js 2>/dev/null | sed -n '/ok\|FAIL\|passed/p' || FAIL=1
+# -E (extended) on purpose: in plain BSD sed on macOS, "\|" is a literal pipe, not "or", so this printed
+# nothing at all and the self-test results were invisible. Same macOS-vs-GNU sed trap as the baseline diff bug.
+node training/selftest.js 2>/dev/null | sed -nE '/ok|FAIL|passed/p' || FAIL=1
 node training/selftest.js >/dev/null 2>&1 || FAIL=1
 say "3. Quality check vs baseline (about a minute)"
 tools/fair_check.sh check app/model6/reader/model.json app/model6 >/dev/null 2>&1
@@ -41,8 +43,13 @@ elif diff <(printf '%s' "$NOWE") training/baseline-ruleE.txt >/dev/null; then ec
 else echo "  CHANGED from baseline:"; diff <(printf '%s' "$NOWE") training/baseline-ruleE.txt | sed 's/^/    /'; FAIL=1; fi
 if [ "$1" = "--browser" ] || [ "$2" = "--browser" ]; then
   say "5. Browser smoke test (a few minutes)"
-  (cd app && python3 -m http.server 8767 >/dev/null 2>&1 & echo $! > /tmp/zcheck-server.pid); sleep 1
+  # Start the little web server the pages are served from, and wait until it actually answers. A flat "sleep 1"
+  # was enough on a warm machine and not on a cold one, so the first run of the day could fail for no real
+  # reason. $! must also be python's own PID - taken from inside a (cd app && … &) subshell it was the
+  # subshell's, so the kill missed and every run left a server behind holding port 8767.
+  python3 -m http.server -d app 8767 >/dev/null 2>&1 & SERVER_PID=$!
+  for _ in $(seq 1 40); do curl -sf -o /dev/null http://localhost:8767/index.html && break; sleep 0.25; done
   node tools/browser_smoke.js 2>/dev/null || FAIL=1
-  kill "$(cat /tmp/zcheck-server.pid)" 2>/dev/null
+  kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null
 fi
 echo; [ $FAIL = 0 ] && echo "ALL CHECKS PASSED" || { echo "SOME CHECKS FAILED"; exit 1; }
