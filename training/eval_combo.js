@@ -18,6 +18,9 @@ const TOPK = process.env.TOPK ? Number(process.env.TOPK) : 3;
 
 const hold = process.env.HOLD_TEST ? process.env.HOLD_TEST.split(",").filter(Boolean) : undefined;
 const { test, heldScans } = loadData({ synth: false, tests: false, hold });
+// SCAN_DIR=<folder laid out like tests/> reads the held-back scans from a copy instead (e.g. experiments/gate-sim/n131,
+// shrunk close-ups mimicking a smaller chocolate - see training/gate_sim.py); the real tests/ folder is never touched
+if (process.env.SCAN_DIR) { const from = path.resolve(ROOT, "tests") + path.sep, to = path.resolve(process.env.SCAN_DIR) + path.sep; for (const a of heldScans) a.file = a.file.replace(from, to); }
 
 (async () => {
   const PR = path.resolve(process.env.PRINT), reader = await tf.loadLayersModel("file://" + path.resolve(process.env.READER || path.join(ROOT, "app/model4/reader/model.json")));
