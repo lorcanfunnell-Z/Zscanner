@@ -13,6 +13,10 @@ predict a wrong answer. It never changes a rule, a model or the gallery - it onl
                                                          or a DUMP file written by eval_combo.js via tools/fair_check.sh
                                                          (then --rule picks the answering rule: agree99 [default], agree,
                                                          agree95, combined80, combined95, m4, top1)
+    python3 training/scorecard.py risk                   risk-coverage report: for each logged signal, how many scans stay
+                                                         answered and how many are wrong as its threshold tightens; then one
+                                                         logistic model on all signals, scored leave-one-session-out; test-8
+                                                         (torch) shown separately. Report only - no rule is changed
     python3 training/scorecard.py verdict <right-to-wrong> <wrong-to-right>   the verdict for raw flip counts
     python3 training/scorecard.py selftest               known cases: 14 vs 0 must be real, 8 vs 6 must be "can't tell"
     --sessions test-4,test-5                             use these sessions instead of training/sessions.json's held-back list
@@ -229,6 +233,175 @@ def selftest():
         ok = abs(got - want) < 1e-12; fails += not ok; print(f"  {'ok  ' if ok else 'FAIL'} p-value {got:.6f} (expected {want:.6f})")
     print("selftest: " + ("all passed" if not fails else f"{fails} FAILED")); return fails
 
+# ---------------------------------------------------------------- risk and coverage ----------------------------------------------------------------
+import statistics
+# (name, direction, description): direction "high" = a higher value should be safer, "low" = a lower value should be safer
+SIGNALS = [("psim_med", "high", "median chocoprint similarity over the frames held"),
+           ("psim_min", "high", "lowest chocoprint similarity over the frames held"),
+           ("share_final", "high", "share of held frames whose own top guess was the final answer"),
+           ("print_share", "high", "share of window frames where the chocoprint named the answer (what rule E's printShare checks)"),
+           ("m4_share", "high", "share of window frames where the reader named the answer"),
+           ("margin", "high", "top-1 minus top-2 of the window average at the moment of answering"),
+           ("duration", "low", "ms from first seen to the answer"),
+           ("frames", "low", "frames held before answering"),
+           ("rejected", "low", "frames the quality gates threw away during the scan (not logged before 28 Oct: test-4/5 show 0)"),
+           ("qsure_min", "high", "lowest 'which way up' confidence in the window"),
+           ("size_med", "high", "median box size (share of the view)"),
+           ("sharp_min", "high", "lowest sharpness in the window"),
+           ("looks", "low", "extra finder passes (look-again, 12 Nov) - only in sessions scanned after it shipped"),
+           ("size1", "high", "box size before the look-again - only in sessions scanned after it shipped")]
+MODEL_EXCLUDE = {"rejected"}   # a session marker, not a signal: zero for every test-4/5 scan simply because it was not logged then
+
+def scan_signals(f):
+    """Per-scan signals for one answered scan, from trace_replay's detail='full' entry: what the phone had at the moment it answered."""
+    seen, said = f["seen"], f["said"]; held, win = seen["held"], seen["win"]
+    med = lambda xs: statistics.median(xs) if xs else None
+    ps = [h["psim"] for h in held if h.get("psim") is not None]
+    q = [h["qsure"] for h in win if h.get("qsure") is not None]
+    lk = [h["looks"] for h in held if h.get("looks") is not None]; s1 = [h["size1"] for h in held if h.get("size1") is not None]
+    return {"psim_med": med(ps), "psim_min": min(ps) if ps else None,
+            "share_final": sum(1 for h in held if h["top"][0][0] == said) / len(held),
+            "print_share": sum(1 for h in win if h.get("pmark") == tr.zm(said)) / len(win),
+            "m4_share": sum(1 for h in win if tr.zm(h.get("m4top")) == tr.zm(said)) / len(win),
+            "margin": seen["tp"] - seen["sp"], "duration": f["at"], "frames": len(held), "rejected": len(f["scan"].get("rejected") or []),
+            "qsure_min": min(q) if q else None, "size_med": med([h["size"] for h in held]), "sharp_min": min(h["sharp"] for h in win),
+            "looks": max(lk) if lk else None, "size1": med(s1) if s1 else None}
+
+def answered_scans(sessions):
+    """Every rule-E-answered scan of these sessions with its signals and whether it was wrong."""
+    out = []
+    for s in sessions:
+        for f in tr.run(tr.E, detail="full", L=tr.load(os.path.join(ROOT, "tests", s))):
+            if f["said"]: out.append({"session": s, "id": f"{s}#{f['scan'].get('n', '?')}", "truth": f["truth"], "said": f["said"], "wrong": f["said"] != f["truth"], **scan_signals(f)})
+    return out
+
+def coverage_table(items, name, direction, attempted, steps=(1.0, .9, .8, .7, .6, .5, .4, .3)):
+    """items: [(value, wrong)] for answered scans. Walk from the loosest cut (everyone answered) to tighter ones; at each
+    cut report how many scans are still answered and how many of those are wrong. Ties are never split."""
+    pts = sorted([(v, w) for v, w in items if v is not None], key=lambda t: (-t[0] if direction == "high" else t[0]))
+    if not pts: print(f"  (no values logged)"); return None
+    n = len(pts)
+    # valid cut points: after the k-th scan only if the (k+1)-th has a different value
+    cuts = [k for k in range(1, n + 1) if k == n or pts[k][0] != pts[k - 1][0]]
+    cum = [0]
+    for v, w in pts: cum.append(cum[-1] + w)
+    sym = ">=" if direction == "high" else "<="
+    num = lambda v: f"{int(v):11d}" if float(v).is_integer() else f"{v:11.3f}"
+    print(f"  {'threshold':>14s} {'answered':>14s} {'wrong':>6s} {'wrong/100':>10s}")
+    shown = set()
+    for frac in steps:
+        target = round(frac * n); ks = [k for k in cuts if k <= target]
+        if not ks or ks[-1] in shown: continue
+        k = ks[-1]; shown.add(k); v = pts[k - 1][0]
+        print(f"  {sym} {num(v)} {k:5d} ({100 * k / attempted:3.0f}%) {cum[k]:6d} {100 * cum[k] / k:10.1f}")
+    best2 = max((k for k in cuts if cum[k] / k <= 0.02), default=None); best0 = max((k for k in cuts if cum[k] == 0), default=None)
+    note = (f"  at most 2 wrong/100: {sym} {num(pts[best2 - 1][0]).strip()} keeps {best2} answered ({100 * best2 / attempted:.0f}% of attempted), {cum[best2]} wrong"
+            if best2 else "  no cut reaches 2 wrong per 100 answered")
+    if best0: note += f"; zero wrong: {sym} {num(pts[best0 - 1][0]).strip()} keeps {best0} ({100 * best0 / attempted:.0f}%)"
+    print(note)
+    # the assumed direction may be wrong - say so if cutting the other way does better
+    rev = sorted(pts, key=lambda t: (t[0] if direction == "high" else -t[0])); rcum = 0; rbest = None
+    for k, (v, w) in enumerate(rev, 1):
+        rcum += w
+        if (k == n or rev[k][0] != v) and rcum / k <= 0.02: rbest = k
+    if rbest and rbest > (best2 or 0):
+        print(f"  note: the OPPOSITE direction works better on these scans ({'lower' if direction == 'high' else 'higher'} = safer): "
+              f"{'<=' if direction == 'high' else '>='} {num(rev[rbest - 1][0]).strip()} keeps {rbest} ({100 * rbest / attempted:.0f}%) at 2 wrong/100 or better")
+    return best2
+
+# --- a small logistic model on all signals, pure Python: standardise, L2 penalty, gradient descent ---
+def fit_logistic(X, y, l2=1.0, iters=4000, lr=0.3):
+    n, d = len(X), len(X[0]); w = [0.0] * d; b = 0.0
+    for _ in range(iters):
+        gw = [0.0] * d; gb = 0.0
+        for xi, yi in zip(X, y):
+            z = b + sum(wj * xj for wj, xj in zip(w, xi)); p = 1 / (1 + math.exp(-max(-30, min(30, z)))); e = p - yi
+            for j in range(d): gw[j] += e * xi[j]
+            gb += e
+        w = [wj - lr * (gj / n + l2 * wj / n) for wj, gj in zip(w, gw)]; b -= lr * gb / n
+    return w, b
+
+def standardiser(rows, names):
+    mu = {k: statistics.mean(r[k] for r in rows) for k in names}
+    sd = {k: (statistics.pstdev([r[k] for r in rows]) or 1.0) for k in names}
+    return lambda r: [(r[k] - mu[k]) / sd[k] for k in names]
+
+def risk_score(w, b, x):
+    return 1 / (1 + math.exp(-max(-30, min(30, b + sum(wj * xj for wj, xj in zip(w, x))))))
+
+def risk_report(sessions, extra=("test-8",)):
+    attempted = {s: len(tr.load(os.path.join(ROOT, "tests", s))) for s in sessions + list(extra)}
+    rows = answered_scans(sessions); n_att = sum(attempted[s] for s in sessions)
+    nw = sum(r["wrong"] for r in rows)
+    print(f"Risk and coverage - which logged signals predict a wrong answer?  rule E on {', '.join(sessions)}: {n_att} scans attempted, {len(rows)} answered, {nw} wrong")
+    print("Each table tightens one signal's threshold step by step: 'answered' = scans still answered (and % of all attempted), 'wrong' among them.")
+    print("The goal line is 2 wrong per 100 answered. Signals are what the phone had at the moment it answered, taken from the saved trace.\n")
+    present = [s for s in SIGNALS if any(r[s[0]] is not None for r in rows)]
+    missing = [s[0] for s in SIGNALS if s not in present]
+    for name, direction, desc in present:
+        print(f"{name}  ({desc}; {'higher' if direction == 'high' else 'lower'} = safer)")
+        coverage_table([(r[name], r["wrong"]) for r in rows], name, direction, n_att); print()
+    if missing: print(f"not present in any saved session, so not tabulated: {', '.join(missing)}\n")
+    # the known starting point: raw psim does not separate the tilted test-6 errors
+    t6 = [r for r in rows if r["session"] == "test-6" and r["wrong"]]
+    if t6:
+        print("Starting point to reproduce - the test-6 wrong answers' chocoprint similarity (median over the scan):")
+        print("  " + "  ".join(f"{r['truth']}→{r['said']} {r['psim_med']:.2f}" for r in t6))
+        rights = sorted(r["psim_med"] for r in rows if not r["wrong"] and r["psim_med"] is not None)
+        print(f"  right answers' psim_med: median {statistics.median(rights):.2f}, lowest quarter under {rights[len(rights) // 4]:.2f} - "
+              f"the tilted errors sit among the most confident right answers, so no psim cut removes them cheaply\n")
+    # the combined model
+    feats = [s[0] for s in present if s[0] not in MODEL_EXCLUDE and all(r[s[0]] is not None for r in rows)]
+    print(f"Combined: one logistic model on {len(feats)} signals ({', '.join(feats)}), L2-regularised, scored leave-one-session-out")
+    print("  (each session is scored by a model that never saw it; the scores below are those out-of-sample risks)")
+    oof = []
+    for s in sessions:
+        train = [r for r in rows if r["session"] != s]; test = [r for r in rows if r["session"] == s]
+        if not test: continue
+        std = standardiser(train, feats); w, b = fit_logistic([std(r) for r in train], [1.0 if r["wrong"] else 0.0 for r in train])
+        for r in test: oof.append((risk_score(w, b, std(r)), r["wrong"], r))
+    best = coverage_table([(p, w) for p, w, _ in oof], "risk", "low", n_att)
+    ranked = sorted(oof, key=lambda t: -t[0])
+    print("  the 11 riskiest scans by the model: " + "  ".join(f"{r['id']}({'WRONG' if w else 'right'} {p:.2f})" for p, w, r in ranked[:11]))
+    std = standardiser(rows, feats); w, b = fit_logistic([std(r) for r in rows], [1.0 if r["wrong"] else 0.0 for r in rows])
+    print("  weights on the standardised signals, full fit (positive = more risk): " + ", ".join(f"{k} {v:+.2f}" for k, v in sorted(zip(feats, w), key=lambda t: -abs(t[1]))))
+    print()
+    # the plain statement
+    per_signal = {}
+    for name, direction, desc in present:
+        pts = [(r[name], r["wrong"]) for r in rows if r[name] is not None]
+        pts.sort(key=lambda t: (-t[0] if direction == "high" else t[0])); cum = 0; bestk = None
+        for k, (v, wr) in enumerate(pts, 1):
+            cum += wr
+            if (k == len(pts) or pts[k][0] != v) and cum / k <= 0.02: bestk = k
+        per_signal[name] = bestk
+    reach = {k: v for k, v in per_signal.items() if v}
+    print("PLAIN STATEMENT")
+    if reach:
+        bestname = max(reach, key=reach.get)
+        print(f"  Single signals that reach 2 or fewer wrong per 100 answered: " + ", ".join(f"{k} (keeping {v} of {n_att} attempted = {100 * v / n_att:.0f}%)" for k, v in sorted(reach.items(), key=lambda t: -t[1])))
+        print(f"  The best of them, {bestname}, does it by answering only {100 * reach[bestname] / n_att:.0f}% of scans - and a cut chosen by looking at these same scans will look better here than on new ones.")
+    else:
+        print("  No single signal reaches 2 wrong per 100 answered at any threshold on these scans.")
+    if best: print(f"  The combined model (out-of-sample) reaches 2 wrong per 100 by answering {best} of {n_att} attempted ({100 * best / n_att:.0f}%).")
+    else: print("  The combined model (out-of-sample) does not reach 2 wrong per 100 answered at any answer rate.")
+    print(f"  With only {nw} wrong answers in the pool, every one of these cuts rests on a handful of scans; treat them as leads to test on the exam session, not as rules.\n")
+    # test-8 separately: the flash session, a different lighting condition
+    for s in extra:
+        if not os.path.exists(os.path.join(ROOT, "tests", s, "test-log.json")): continue
+        r8 = answered_scans([s]); w8 = sum(r["wrong"] for r in r8)
+        print(f"{s} (shown separately - torch on, a condition real clients never use): {attempted[s]} attempted, {len(r8)} answered, {w8} wrong")
+        for name, direction, desc in present:
+            if name in MODEL_EXCLUDE or not all(r[name] is not None for r in r8): continue
+            pts = sorted([(r[name], r["wrong"]) for r in r8], key=lambda t: (-t[0] if direction == "high" else t[0]))
+            print(f"  {name:12s} wrong answers' values: {', '.join((str(int(v)) if float(v).is_integer() else f'{v:.3f}') for v, wr in pts if wr) or '-'};  safest-to-riskiest rank of the wrong ones: "
+                  + ", ".join(str(i + 1) for i, (v, wr) in enumerate(pts) if wr) + f" of {len(pts)}")
+        sc8 = [(risk_score(w, b, std(r)), r["wrong"]) for r in r8 if all(r[k] is not None for k in feats)]
+        if sc8:
+            print(f"  combined model trained on {', '.join(sessions)}, applied to {s}:")
+            coverage_table(sc8, "risk", "low", attempted[s])
+        print()
+
 def main(argv):
     sessions = held_sessions(); dump_rule = "agree99"
     if "--sessions" in argv:
@@ -240,6 +413,7 @@ def main(argv):
     if argv[0] == "compare" and len(argv) == 3: compare(argv[1], argv[2], sessions, dump_rule); return
     if argv[0] == "verdict" and len(argv) == 3: verdict_cmd(int(argv[1]), int(argv[2])); return
     if argv[0] == "selftest": sys.exit(selftest())
+    if argv[0] == "risk": risk_report(sessions); return
     print(f"unknown command {' '.join(argv)!r} - see the usage at the top of this file"); sys.exit(1)
 
 if __name__ == "__main__":
