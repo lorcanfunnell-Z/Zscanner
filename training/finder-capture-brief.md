@@ -46,6 +46,25 @@ The box only needs to be roughly right. "Nothing" shots need no box at all and a
 
 When you're finished, **Download labelled photos (.zip)** and send it over.
 
+## Round 1 (12 Nov) — what arrived, and what round 2 needs
+
+28 photos came back: every chocolate once, all on bare wood on one desk, always in the same spot lower-centre,
+and no "Nothing" shots. Retrained and fair-tested properly: no change (3/17 → 3/17), so nothing shipped. The
+boxes were all drawn correctly and the distance was right — the gaps are in *variety*, so round 2 is not about
+covering all 28 numbers again. Four or five chocolates is plenty. What matters:
+
+- **Chocolate ON the white card or napkin, at distance.** Every held-back test photo has it on the napkin and
+  none of the 28 did, so the finder still boxes the napkin instead of the chocolate. Roughly a third of the
+  chocolate shots on the card, the rest off it.
+- **"Nothing" shots — still none.** About 40: the same desk with the chocolate taken away, the napkin on its
+  own, the laptop keyboard and trackpad, the edge of the table with the floor below it.
+- **Move it around.** At least three different surfaces and two kinds of light, and put the chocolate in the
+  corners, near the edges and in the **top half** of the frame, not always bottom-centre.
+- **A spread of sizes.** Some a bit back (0.135–0.20 wide in the ingest summary), most around the 50cm target
+  (0.095–0.135), a few further. One thing to know: the live app currently refuses anything under 0.13 as
+  "too small, move closer", so the 50cm target sits right on that line — a decision on lowering it is pending
+  (see CLAUDE.md, 12 Nov).
+
 ## What to shoot
 
 Roughly 150 photos. It goes quickly — the "Nothing" half needs no box drawing.
