@@ -3,11 +3,27 @@
 # Each trace holds only the frames the phone read before it answered, so a stricter rule that hasn't answered by the
 # end of a trace is shown as "kept going" (the phone would have kept scanning; we can't know what it would have said).
 # NOTE: rules chosen by looking at a session must be confirmed on a NEW session before they count as proven.
-import json, sys
+#
+# Also importable (13 Nov, for training/scorecard.py): load(session_dir) reads a session's traces, run(rule, ..., L=rows)
+# replays them, E is the live rule and NEW_RULES the family printed by "new" mode. The command-line behaviour and every
+# printed line are unchanged (tools/check.sh step 4 diffs this script's "new" output against training/baseline-ruleE.txt).
+import json, os, sys
 from collections import Counter
-L = [r for r in json.load(open(sys.argv[1] + "/test-log.json")) if r.get("truth") and r.get("trace")]
-META = json.load(open("app/model6/meta.json"))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+L = None   # the loaded session's scans (set by main() or by a caller after load())
+META = json.load(open(os.path.join(ROOT, "app/model6/meta.json")))
 zm = lambda k: "z" if k and k.startswith("z") else k
+E = {"or99": 1, "printshare": .8, "logic": "shell"}   # rule E: the live decision rule (app/model6/meta.json)
+NEW_RULES = [("E (current production rule: model6 meta.json)", E),
+             ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
+             ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
+             ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
+             ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
+             ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45}),
+             ("E + 5s hard deadline (3 Nov test)", {**E, "deadline": 5000})]
+
+def load(session_dir):   # the scans a replay can use: labelled, with a trace
+    return [r for r in json.load(open(os.path.join(session_dir, "test-log.json"))) if r.get("truth") and r.get("trace")]
 
 def jsvote(keys):
     c = {}
@@ -19,10 +35,12 @@ def jsvote(keys):
 def adiff(a, b):                                        # smallest gap between two angles, in degrees
     d = abs((a - b) % 360); return min(d, 360 - d)
 
-def run(rule, K=3, detail=False):
-    out = []
-    for r in L:
-        held, said, at = [], None, None
+def run(rule, K=3, detail=False, L=None):
+    # detail=True returns (truth, said, at) per scan; detail="full" adds what the rule saw at the moment it answered
+    rows = L if L is not None else globals()["L"]
+    out, full = [], []
+    for r in rows:
+        held, said, at, seen = [], None, None, None
         for f in r["trace"]:
             held.append(f); win = [h for i, h in enumerate(held) if f["t"] - h["t"] <= 600 or i >= len(held) - 3]   # as the phone: last 0.6 s, always at least 3 frames
             if f["t"] - held[0]["t"] < 400: continue
@@ -58,36 +76,40 @@ def run(rule, K=3, detail=False):
                 ok = ok and shell_ok
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
             forced = rule.get("deadline") and f["t"] >= rule["deadline"] and len(win) >= 3   # test (3 Nov): hard cutoff, answer with the current top guess
-            if (ok and tp >= .5 and tp - sp >= .2) or forced: said = top; at = f["t"] - held[0]["t"]; break
+            if (ok and tp >= .5 and tp - sp >= .2) or forced:
+                said = top; at = f["t"] - held[0]["t"]
+                seen = {"top": top, "tp": tp, "sp": sp, "win": list(win), "held": list(held), "agree": bool(agree), "forced": bool(forced)}
+                break
         out.append((r["truth"], said, at if said else None))
+        full.append({"truth": r["truth"], "said": said, "at": at if said else None, "scan": r, "held": list(held), "seen": seen})
+    if detail == "full": return full
     if detail: return out
     ans = [o for o in out if o[1]]; wrong = [o for o in ans if o[1] != o[0]]
     ts = sorted(o[2] for o in ans); med = ts[len(ts) // 2] / 1000 if ts else 0
     slow = " ".join(f"{o[0]}:{o[2]/1000:.1f}s" for o in ans if o[2] > 3000)
     return f"answered {len(ans)}/{len(out)}, wrong {len(wrong)} {' '.join(t + '→' + s for t, s, _ in wrong)} | typical {med:.1f}s after first seen | slow: {slow}"
 
-if len(sys.argv) > 2 and sys.argv[2] == "sweep":
-    # sweeps printShare (currently 0.8 in app/model6/meta.json) against the usual held-back sessions, rule E
-    # otherwise unchanged (or99 + shell-only logic). No new photos needed: same logged traces, just a different cutoff.
-    for ps in [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-        tag = f"printShare={ps}" + (" (current)" if ps == META.get("printShare") else "")
-        print(f"{tag:28s} {run({'or99': 1, 'printshare': ps, 'logic': 'shell'})}")
-    sys.exit()
+def main():
+    global L
+    L = load(sys.argv[1])
+    if len(sys.argv) > 2 and sys.argv[2] == "sweep":
+        # sweeps printShare (currently 0.8 in app/model6/meta.json) against the usual held-back sessions, rule E
+        # otherwise unchanged (or99 + shell-only logic). No new photos needed: same logged traces, just a different cutoff.
+        for ps in [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+            tag = f"printShare={ps}" + (" (current)" if ps == META.get("printShare") else "")
+            print(f"{tag:28s} {run({'or99': 1, 'printshare': ps, 'logic': 'shell'})}")
+        sys.exit()
 
-if len(sys.argv) > 2 and sys.argv[2] == "new":
-    E = {"or99": 1, "printshare": .8, "logic": "shell"}
-    for name, rule in [("E (current production rule: model6 meta.json)", E),
-                       ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
-                       ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
-                       ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
-                       ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
-                       ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45}),
-                       ("E + 5s hard deadline (3 Nov test)", {**E, "deadline": 5000})]:
-        print(f"{name:45s} {run(rule)}")
-    sys.exit()
+    if len(sys.argv) > 2 and sys.argv[2] == "new":
+        for name, rule in NEW_RULES:
+            print(f"{name:45s} {run(rule)}")
+        sys.exit()
 
-for name, rule, K in [("D+ and chocoprint 80%, shell check only", {"or99": 1, "printshare": .8, "logic": "shell"}, 3),
-                      ("D+, shell check only", {"or99": 1, "logic": "shell"}, 3),("D+ (current: agree, or 99% sure)", {"or99": 1}, 3), ("D (agree only)", {}, 3),
-                      ("D+ and last 3 frames all the same", {"or99": 1, "stable": 1}, 3), ("D+ and last 5 frames all the same", {"or99": 1, "stable": 1}, 5),
-                      ("D and last 3 frames all the same", {"stable": 1}, 3), ("D+ and chocoprint in 80% of frames", {"or99": 1, "printshare": .8}, 3)]:
-    print(f"{name:45s} {run(rule, K)}")
+    for name, rule, K in [("D+ and chocoprint 80%, shell check only", {"or99": 1, "printshare": .8, "logic": "shell"}, 3),
+                          ("D+, shell check only", {"or99": 1, "logic": "shell"}, 3),("D+ (current: agree, or 99% sure)", {"or99": 1}, 3), ("D (agree only)", {}, 3),
+                          ("D+ and last 3 frames all the same", {"or99": 1, "stable": 1}, 3), ("D+ and last 5 frames all the same", {"or99": 1, "stable": 1}, 5),
+                          ("D and last 3 frames all the same", {"stable": 1}, 3), ("D+ and chocoprint in 80% of frames", {"or99": 1, "printshare": .8}, 3)]:
+        print(f"{name:45s} {run(rule, K)}")
+
+if __name__ == "__main__":
+    main()
