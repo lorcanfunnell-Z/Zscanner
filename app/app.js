@@ -279,11 +279,28 @@
       trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {
-    if (!r || !r.found) { mark.hidden = true; return; }
+    if (!r || !r.found) { mark.hidden = true; if (finderBox) finderBox.hidden = finderBox1.hidden = true; return; }
     const s = r.box.size * 1.25;
     Object.assign(mark.style, { left: (r.box.cx - s / 2) * 100 + "%", top: (r.box.cy - s / 2) * 100 + "%", width: s * 100 + "%", height: s * 100 + "%" });
     mark.style.setProperty("--progress", Math.min(1, progress));
     mark.hidden = false; mark.dataset.label = "";
+    if (finderBox) {   // admin page: the finder's box exactly as it is, and the first look's box before the look-again
+      const place = (el, b) => { el.hidden = false; Object.assign(el.style, { left: (b.cx - b.size / 2) * 100 + "%", top: (b.cy - b.size / 2) * 100 + "%", width: b.size * 100 + "%", height: b.size * 100 + "%" }); };
+      place(finderBox, r.box); finderBox.dataset.label = `box ${Math.round(r.box.size * 100)}% · ${r.looks ?? 0} look${r.looks === 1 ? "" : "s"} · obj ${r.obj.toFixed(2)}`;
+      if (r.box1 && r.looks) place(finderBox1, r.box1); else finderBox1.hidden = true;
+    }
+  }
+  // Admin page only (13 Nov, for the phone tests): draw the finder's box itself on the viewfinder - solid yellow for the
+  // box the reader will be given, dashed for the first look before the look-again moved it - so it is obvious at a
+  // glance whether the chocolate was located well. The client page keeps only the quiet white ring.
+  let finderBox = null, finderBox1 = null;
+  if (DEBUG) {
+    document.head.insertAdjacentHTML("beforeend", `<style>
+      .fbox{position:absolute;border:2px solid #ffd400;pointer-events:none;transition:left .08s,top .08s,width .08s,height .08s}
+      .fbox::after{content:attr(data-label);position:absolute;left:-2px;top:100%;background:#ffd400;color:#000;font:500 10px/1 var(--sans);letter-spacing:.06em;padding:3px 5px;white-space:nowrap}
+      .fbox1{position:absolute;border:1px dashed #19d2ff;pointer-events:none}</style>`);
+    viewer.insertAdjacentHTML("beforeend", `<div class="fbox1" id="finderBox1" hidden></div><div class="fbox" id="finderBox" hidden></div>`);
+    finderBox = $("#finderBox"); finderBox1 = $("#finderBox1");
   }
   function answer(key, vec, reinforcedAs) {
     report("answer", key);
@@ -353,7 +370,8 @@
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
             sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, obj: +r.obj.toFixed(3), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null,
-            looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]),   // looks/size1: the look-again's extra finder passes and the box size before them
+            looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null, cx1: r.box1 ? +r.box1.cx.toFixed(3) : null, cy1: r.box1 ? +r.box1.cy.toFixed(3) : null,   // looks/size1/cx1/cy1: the look-again's extra finder passes and the first look's box before them
+            top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]),
             qraw: r.qraw != null ? +r.qraw.toFixed(2) : null,   // 13 Nov: the which-way-up model's own confidence on the frames it actually ran on (null = rotation reused); qsure is the resolved value
             vec: r.print?.vec ? r.print.vec.map(v => +v.toFixed(3)) : null });   // 13 Nov: this frame's chocoprint, so a replay can rescore the live rule against a changed gallery (e.g. reinforcement on vs off)
         }
@@ -383,7 +401,7 @@
           : mean(h => h.qsure) < 0.8 ? "Hold the phone straight above the number"
           : mean(h => h.sharp) < 80 ? "Hold steady for a moment" : "Hold a little closer, straight above the number";
         if (idk) $("#hint").textContent = idk;
-        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)} | tilt ${tiltAngle != null ? Math.round(tiltAngle) + "°" : "– (" + tiltPermission + ")"}`;
+        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | box ${Math.round(r.box.size * 100)}% ${r.looks ?? 0} looks | sharp ${Math.round(r.sharp)} | tilt ${tiltAngle != null ? Math.round(tiltAngle) + "°" : "– (" + tiltPermission + ")"}`;
         const markVote = lastInfo.mark;
         // rule "agree" (model 5): the classifier and the chocoprints, each voting over the held second, must name the same chocolate
         const vote = f => { const c = {}; held.forEach(h => { const k = f(h); if (k) c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };

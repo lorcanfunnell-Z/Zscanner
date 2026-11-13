@@ -170,15 +170,15 @@ window.Recognizer = (() => {
     const { w, h } = srcSize(source);
     sq = sq || { x: (w - Math.min(w, h)) / 2, y: (h - Math.min(w, h)) / 2, size: Math.min(w, h) };
     const now = performance.now(), recent = opts.track && prev && now - prev.t < Math.max(250, 3 * prev.dur);
-    let obj, cx, cy, bs, looks = 0, bs1;
+    let obj, cx, cy, bs, looks = 0, bs1, cx1, cy1;   // bs1/cx1/cy1: the first look's box, before the look-again (for the admin overlay and trace)
     const reuse = recent && nFrame % 2 === 0;
-    if (reuse) ({ obj, cx, cy, bs, looks, bs1 } = prev.fin);   // reuse the box on alternate frames while holding
+    if (reuse) ({ obj, cx, cy, bs, looks, bs1, cx1, cy1 } = prev.fin);   // reuse the box on alternate frames while holding
     else {
       const findIn = (x, y, size) => {   // the finder on one square of the source; box as fractions of that square
         const fin = tf.tidy(() => finder.predict(grab(source, x, y, size).expandDims(0)));
         const o = fin[0].dataSync()[0], [a, b, c] = fin[1].dataSync(); tf.dispose(fin); return { obj: o, cx: a, cy: b, bs: c };
       };
-      ({ obj, cx, cy, bs } = findIn(sq.x, sq.y, sq.size)); bs1 = bs;
+      ({ obj, cx, cy, bs } = findIn(sq.x, sq.y, sq.size)); bs1 = bs; cx1 = cx; cy1 = cy;
       // Look again (12 Nov 2026). The finder is excellent when the chocolate fills a good part of what it sees and poor
       // when it is small: further back it boxes the white card or the laptop the chocolate sits on (CLAUDE.md, "Reading
       // from further away"). Its first guess is usually in roughly the right place though, so look again at a window
@@ -199,8 +199,8 @@ window.Recognizer = (() => {
       }
     }
     if (!opts.track) prev = null;
-    const box = { cx, cy, size: Math.max(0.08, bs) }; lap("finder");
-    if (obj < 0.5) { prev = null; return { found: false, obj, box, looks, size1: bs1 }; }
+    const box = { cx, cy, size: Math.max(0.08, bs) }, box1 = { cx: cx1, cy: cy1, size: Math.max(0.08, bs1) }; lap("finder");
+    if (obj < 0.5) { prev = null; return { found: false, obj, box, box1, looks, size1: bs1 }; }
     const side = box.size * meta.readerPad * sq.size, x = sq.x + cx * sq.size - side / 2, y = sq.y + cy * sq.size - side / 2;
     grab(source, x, y, side).dispose();
     snapCtx.drawImage(canvas, 0, 0);   // keep the standard close-up (whole chocolate, as seen) for the test log and gallery
@@ -208,7 +208,7 @@ window.Recognizer = (() => {
     let pid, psh, pmk, rot = 0, qsure = 1, qraw = null, resolvedPrint = null;
     if (!quarter) {
       [pid, psh, pmk] = readAt(source, x, y, side, 0);
-      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 } };   // a model folder without a quarter model: still worth reusing the box
+      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1, cx1, cy1 } };   // a model folder without a quarter model: still worth reusing the box
     } else {                                                   // reader reads as it is; straightening is only for the chocoprint
       [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
       const e = reuse && prev.e != null ? prev.e : edgeAngle(); lap("straighten (edges)");   // same box as last frame → same angle
@@ -245,7 +245,7 @@ window.Recognizer = (() => {
         // otherwise a cached reuse on the very next frame would silently revert to the wrong rotation
         rot = best.rot; q = best.q; qsure = 1; resolvedPrint = best.pr; lap("which side is up (chocoprint check)");
       }
-      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 }, e, q, qsure, psim: null };
+      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1, cx1, cy1 }, e, q, qsure, psim: null };
     }
     let ranked = combine(pid, psh, pmk), print = null; const m4top = ranked[0].key;
     if (printer) {
@@ -263,7 +263,7 @@ window.Recognizer = (() => {
         ranked = [{ key: print.mark, p: 0.9 }, ...ranked.map(r => ({ key: r.key, p: r.p * 0.1 }))];
       lap("gallery compare");
     }
-    return { found: true, obj, box, looks, size1: bs1, sharp, light: lit, rot, qsure, qraw, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+    return { found: true, obj, box, box1, looks, size1: bs1, sharp, light: lit, rot, qsure, qraw, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
   // Like Face ID folding a good unlock back into its template: when a scan is answered at the highest confidence

@@ -28,7 +28,7 @@ and decision since October is `docs/HISTORY.md`, kept verbatim: search it before
 - **Reinforcement:** a top-confidence answer's chocoprint joins the gallery for the rest of the visit (clients only, off in admin test sessions, never fair-tested — Open decisions). A correction is "Choose the number instead" then a tray tap; a plain tray tap never touches the gallery.
 - **Single-photo path** (camera unavailable, e.g. some in-app browsers): one frame, agree-or-99%, otherwise chips. Measured 13 Nov: within noise of the live rule.
 - **First visit:** the camera opens while the models download (~8.4 MB: models and packed gallery 6.8 MB, TensorFlow 1.5 MB); the viewfinder shows the progress. Return visits are ready in 4–6 s.
-- **Admin page extras:** test log with Exam mode and a "Nothing" label, tilt permission asked inside the Scan tap (client page not yet), torch, speed and camera tests, reference and manual-label capture rounds.
+- **Admin page extras:** test log with Exam mode and a "Nothing" label, tilt permission asked inside the Scan tap (client page not yet), the finder's box drawn on the viewfinder (solid yellow = the box the reader gets, with its size, number of extra looks and the finder's confidence; dashed blue = the first look before the look-again moved it), torch, speed and camera tests, reference and manual-label capture rounds. The client page shows only the quiet white ring.
 - **Branches (13 Nov):** `main` is behind. `finder-real-photos` → `scorecard` → `ship-what-is-tested` → `eight-fixes` build on each other and are unmerged pending Lorcan's phone tests (Next steps 1).
 
 ## The numbers that matter

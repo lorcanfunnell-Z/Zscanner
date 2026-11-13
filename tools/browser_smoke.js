@@ -38,6 +38,21 @@ const { edgeAngle } = require("../training/align_lib.js");
   const angleInNode = edgeAngle(new Uint8Array(rgb), 224).angle;
   const angleDiff = Math.abs(((angleInBrowser - angleInNode) % 90 + 135) % 90 - 45);   // smallest gap, mod 90
   ok(angleDiff < 5, `recognizer.js's edgeAngle agrees with align_lib.js's (browser ${angleInBrowser.toFixed(1)}°, node ${angleInNode.toFixed(1)}°)`);
+  // 13 Nov: the admin page's live loop too, on the same static picture: its finder-box overlay must appear and label the
+  // box, and the scan must still answer (this path also exercises the admin-only trace and "settling" logging).
+  const adminLive = await a.evaluate(async () => {
+    const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = "images/18.jpg"; });
+    const cv = document.createElement("canvas"); cv.width = cv.height = 640; cv.getContext("2d").drawImage(img, 0, 0, 640, 640);
+    navigator.mediaDevices.getUserMedia = async () => cv.captureStream(15);
+    let label = ""; const watch = setInterval(() => { const b = document.querySelector("#finderBox"); if (b && !b.hidden) label = b.dataset.label; }, 50);
+    document.querySelector("#status").textContent = "";   // the photo upload above left "Found: N°21" here; wait for the live scan's own result
+    document.querySelector("#camBtn").click();
+    const t0 = performance.now(); let status = "";
+    while (performance.now() - t0 < 9000) { status = document.querySelector("#status").textContent.trim(); if (/Found|certain/.test(status)) break; await new Promise(r => setTimeout(r, 100)); }
+    clearInterval(watch);
+    return { status: status || "(no result within 9 s)", label };
+  });
+  ok(/N°18/.test(adminLive.status) && /box \d+%/.test(adminLive.label), `admin live loop: ${adminLive.status}; finder box overlay: "${adminLive.label}"`);
   const c = await ctx.newPage(), cr = await run(c, "http://localhost:8767/index.html", false);
   ok(await c.evaluate(() => Recognizer.model) === "model6", "client page runs model 6");
   ok(!(await c.$(".adminbar")) && !(await c.$("section.tl")) && (await c.$$(".hk, .hk-heart, .hk-tasting")).length === 0, "client page: no admin tools, no hooks");
@@ -68,6 +83,7 @@ const { edgeAngle } = require("../training/align_lib.js");
     const cv = document.createElement("canvas"); cv.width = cv.height = 640; cv.getContext("2d").drawImage(img, 0, 0, 640, 640);
     navigator.mediaDevices.getUserMedia = async () => cv.captureStream(15);
     const hints = new Set(); const watch = setInterval(() => hints.add(document.querySelector("#hint").textContent), 50);
+    document.querySelector("#status").textContent = "";
     document.querySelector("#camBtn").click();
     const t0 = performance.now(); let status = "";
     while (performance.now() - t0 < 9000) {
