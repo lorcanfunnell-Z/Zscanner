@@ -2,7 +2,8 @@
 
 zScanner lets someone who receives a zChocolat gift point their phone at a chocolate and see which one it is. It is a
 **website** (no app to install), reached from the QR code on the gift card. Built in 2026 by Lorcan Funnell (corporate
-sales, placement until March 2027) with Claude. This guide is for whoever looks after it next.
+sales, placement until March 2027) with Claude. This guide is for whoever looks after it next. The short briefing is `CLAUDE.md`; the full dated history of every
+experiment and decision is `docs/HISTORY.md`.
 
 ## 1. The two pages
 
@@ -59,6 +60,9 @@ Both pages use `app/model6` (its `meta.json` holds the answering rules). The old
   is generated from it), push.
 - **Any change to app files:** bump `VERSION` in `app/sw.js` so phones pick it up. Bump `MODEL_VERSION` only if a model
   file changed (models are kept on phones after the first visit).
+- **Any change to the gallery** (`app/model6/gallery.json`, e.g. after `tools/add_to_gallery.js`): run
+  `node tools/pack_gallery.js` to refresh the 16-bit copy the phone downloads (`gallery.bin` + `gallery.pack.json`),
+  then bump `MODEL_VERSION`. `tools/check.sh` fails if the packed copy lags behind.
 - **Add a new chocolate (seasonal etc.):** admin page → *Add chocolate* → record → download `custom-chocolates.json` →
   put it in `app/` → push. No retraining (works with model 6 and later).
 
@@ -73,8 +77,11 @@ The rule: **every change is measured on data it has never seen, and kept only if
 3. **Adapt (no retraining):** once a newer session has been held back in `training/sessions.json`, add the older one
    to the gallery: `node tools/add_to_gallery.js tests/test-N`. The tool refuses to add the only held-back session.
 4. **Reference round** (admin page): each chocolate in a few lights; add its zip the same way.
-5. **Before pushing:** `tools/check.sh` (add `--browser` for the full browser test). If you improved the model on
-   purpose, save the new numbers: `tools/check.sh --update-baseline`.
+5. **Before pushing:** `tools/check.sh` (add `--browser` for the full browser test, `--photo` for the single-photo
+   path). If you improved the model on purpose, save the new numbers: `tools/check.sh --update-baseline`.
+6. **Ranges and verdicts:** `python3 training/scorecard.py` gives every held-back number with its 95% range, and
+   `python3 training/scorecard.py compare <before> <after>` says whether a change is a real improvement, a real
+   regression, or cannot be told apart on this many scans. Quote that verdict rather than a raw count.
 
 ## 6. Retraining (only if needed)
 
