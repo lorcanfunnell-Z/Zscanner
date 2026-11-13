@@ -347,15 +347,17 @@
           : META.shellOf[topKey] === "milkwhite" ? (META.logic === "shell" || META.markOf[topKey] === markVote)
           : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
-        // test (3 Nov): past HARD_DEADLINE_MS since the first frame that actually cleared the quality gate (not
-        // first detection - an initial blurry/focus-hunting stretch doesn't eat into this budget), stop waiting
-        // for the normal bars (agree/printOk/logicOk/DECIDE/MARGIN) and just answer with whatever's currently the
-        // top guess. Live on both pages - firstClearSeen is tracked unconditionally, not admin-only, which an
-        // earlier version of this got wrong (it depended on the admin-only firstSeen, so never fired for real
-        // clients on the live site at all).
-        const deadlineForced = !!firstClearSeen && (t0 - firstClearSeen) >= HARD_DEADLINE_MS && held.length >= 3;
+        const decided = agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN);
+        // Past HARD_DEADLINE_MS since the first frame that actually cleared the quality gate (not first detection -
+        // an initial blurry/focus-hunting stretch doesn't eat into this budget): stop WITHOUT answering. From 3 to
+        // 13 Nov this answered with whatever was the top guess instead, skipping every check above; replaying the
+        // saved traces (training/trace_replay.py, "E + 5s forced guess") shows that made 4 more test-6 scans wrong
+        // (8 -> 12) and 11 -> 15 pooled over test-4/5/6/7. Now the camera stops and the likeliest three are offered
+        // as chips - the same "Is it one of these?" block the photo path uses - so there is never an automatic
+        // answer without rule E passing. Live on both pages (firstClearSeen is tracked unconditionally).
+        const pastDeadline = !!firstClearSeen && (t0 - firstClearSeen) >= HARD_DEADLINE_MS && held.length >= 3;
         if (DEBUG && firstClearSeen) $("#hint").textContent += ` | ${Math.max(0, Math.round((HARD_DEADLINE_MS - (t0 - firstClearSeen)) / 100) / 10)}s to deadline`;
-        if ((agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN)) || deadlineForced) {
+        if (decided) {
           // like Face ID folding a good unlock back into its template: at the highest confidence tier, add this
           // chocoprint to the gallery for the rest of this visit, so a second pass over the same box gets easier.
           // Not during admin test sessions (DEBUG) — later test scans must stand on their own, not benefit from
@@ -363,8 +365,11 @@
           // this specific reinforcement rather than just piling another one on top.
           const autoReinforced = !DEBUG && highestConfidence(bothAgree, topP) && !!r.print?.vec;
           if (autoReinforced) Recognizer.reinforce(topKey, r.print.vec);
-          lastInfo.forced = deadlineForced;
+          lastInfo.forced = false;
           answer(topKey, r.print?.vec, autoReinforced ? topKey : null); return;
+        } else if (pastDeadline) {
+          lastInfo.forced = false;
+          unsure(sorted.slice(0, 3).map(([k]) => k), r.print?.vec); return;
         }
       } else {
         showMark(null);
@@ -407,20 +412,33 @@
         $("#suggest").hidden = true;
       } else {
         setStatus(`<img class="thumb" src="${url}" alt=""><span>We could not be certain which chocolate this is.</span>`, "err");
-        const s = $("#suggest"); s.hidden = false;
-        s.innerHTML = `<p>Is it one of these?</p><div class="chips">${best.slice(0, 3).map(b => `<button class="chip" type="button" data-k="${b.key}"><img src="${photo(b.key)}" alt="" onerror="this.onerror=null;this.src='images/${b.key}.jpg'">${esc(label(b.key))}</button>`).join("")}</div>`;
-        // like Face ID learning from a failed match once you enter your passcode: the model wasn't sure, but tapping
-        // one of these chips is an explicit, certain answer — a stronger signal than any confidence score — so this
-        // photo's chocoprint joins the gallery for it, even though the automatic read wasn't sure (or picked wrong)
-        s.querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
-          s.hidden = true; setStatus("");
-          const reinforced = !DEBUG && !!res.print?.vec;
-          if (reinforced) Recognizer.reinforce(ch.dataset.k, res.print.vec);
-          render(ch.dataset.k, { scanned: true, vec: res.print?.vec, reinforcedAs: reinforced ? ch.dataset.k : null });
-        });
+        offerChoices(best.slice(0, 3).map(b => b.key), res.print?.vec);
       }
     }, 30);
     img.src = url;
+  }
+
+  // "Is it one of these?": the likeliest few as chips, shared by the photo path and the live scan's deadline.
+  // Like Face ID learning from a failed match once you enter your passcode: the model wasn't sure, but tapping one
+  // of these chips is an explicit, certain answer — a stronger signal than any confidence score — so that scan's
+  // chocoprint joins the gallery for it (not during admin test sessions), even though the automatic read wasn't sure.
+  function offerChoices(keys, vec) {
+    const s = $("#suggest"); s.hidden = false;
+    s.innerHTML = `<p>Is it one of these?</p><div class="chips">${keys.map(k => `<button class="chip" type="button" data-k="${k}"><img src="${photo(k)}" alt="" onerror="this.onerror=null;this.src='images/${k}.jpg'">${esc(label(k))}</button>`).join("")}</div>`;
+    s.querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+      s.hidden = true; setStatus("");
+      const reinforced = !DEBUG && !!vec;
+      if (reinforced) Recognizer.reinforce(ch.dataset.k, vec);
+      render(ch.dataset.k, { scanned: true, vec, reinforcedAs: reinforced ? ch.dataset.k : null });
+    });
+  }
+  // Live scan not certain by the deadline (13 Nov): no guess. Logged for the admin test log as type "unsure" with
+  // its trace, camera off, and the likeliest three offered - the number tray is there as well, as always.
+  function unsure(keys, vec) {
+    report("unsure", null);
+    stopCamera();
+    setStatus("We could not be certain which chocolate this is.", "err");
+    offerChoices(keys, vec);
   }
 
   $("#camBtn").onclick = () => canLive ? startCamera() : $("#photoInput").click();

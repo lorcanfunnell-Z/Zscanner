@@ -68,8 +68,8 @@ def mcnemar_exact(b, c):
 def held_sessions():
     return json.load(open(os.path.join(ROOT, "training", "sessions.json")))["heldBack"]
 
-def replay(session, rule=tr.E):
-    """Per-scan outcomes for one session under a rule: list of (truth, said, at)."""
+def replay(session, rule=tr.LIVE):
+    """Per-scan outcomes for one session under a rule (default: the rule the phone really runs): list of (truth, said, at)."""
     return tr.run(rule, detail=True, L=tr.load(os.path.join(ROOT, "tests", session)))
 
 def tally(outs):
@@ -88,7 +88,7 @@ def row(name, t):
             f"{100 * a / n:5.1f} {fmt_range(al, ah)}")
 
 def scorecard(sessions):
-    print(f"zScanner scorecard - rule E (the live decision rule), replayed from the saved traces of {', '.join(sessions)}")
+    print(f"zScanner scorecard - the live rule (E, no answer past the 5 s deadline), replayed from the saved traces of {', '.join(sessions)}")
     print("Ranges: Wilson 95% intervals. 'wrong' is per 100 ANSWERED scans; 'answer rate' is per 100 scans attempted.\n")
     hdr = f"{'session':22s} {'scans':>5s} {'answered':>11s} {'right':>5s} {'wrong':>5s}   {'wrong/100 ans (95% range)':28s}   {'answer rate % (95% range)'}"
     print(hdr); print("-" * len(hdr))
@@ -124,7 +124,8 @@ def scorecard(sessions):
 
 # ---------------------------------------------------------------- compare ----------------------------------------------------------------
 # A result set is a list of {"id", "truth", "said", "outcome"} with outcome in {"right", "wrong", "none"} (none = not answered).
-RULE_NAMES = {"E": tr.E, "E+A": {**tr.E, "scanmajority": 1}, "E+A2": {**tr.E, "printmajority": 1}, "E+B1": {**tr.E, "anglesteady": 30},
+RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.LIVE, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = LIVE since 13 Nov; E+forced5 was live 3-13 Nov
+              "E+A": {**tr.E, "scanmajority": 1}, "E+A2": {**tr.E, "printmajority": 1}, "E+B1": {**tr.E, "anglesteady": 30},
               "E+B2": {**tr.E, "anglemain": 45}, "E+A+B2": {**tr.E, "scanmajority": 1, "anglemain": 45}, "E+deadline": {**tr.E, "deadline": 5000}}
 
 def outcome(truth, said):
@@ -271,7 +272,7 @@ def answered_scans(sessions):
     """Every rule-E-answered scan of these sessions with its signals and whether it was wrong."""
     out = []
     for s in sessions:
-        for f in tr.run(tr.E, detail="full", L=tr.load(os.path.join(ROOT, "tests", s))):
+        for f in tr.run(tr.LIVE, detail="full", L=tr.load(os.path.join(ROOT, "tests", s))):
             if f["said"]: out.append({"session": s, "id": f"{s}#{f['scan'].get('n', '?')}", "truth": f["truth"], "said": f["said"], "wrong": f["said"] != f["truth"], **scan_signals(f)})
     return out
 
@@ -333,7 +334,7 @@ def risk_report(sessions, extra=("test-8",)):
     attempted = {s: len(tr.load(os.path.join(ROOT, "tests", s))) for s in sessions + list(extra)}
     rows = answered_scans(sessions); n_att = sum(attempted[s] for s in sessions)
     nw = sum(r["wrong"] for r in rows)
-    print(f"Risk and coverage - which logged signals predict a wrong answer?  rule E on {', '.join(sessions)}: {n_att} scans attempted, {len(rows)} answered, {nw} wrong")
+    print(f"Risk and coverage - which logged signals predict a wrong answer?  the live rule on {', '.join(sessions)}: {n_att} scans attempted, {len(rows)} answered, {nw} wrong")
     print("Each table tightens one signal's threshold step by step: 'answered' = scans still answered (and % of all attempted), 'wrong' among them.")
     print("The goal line is 2 wrong per 100 answered. Signals are what the phone had at the moment it answered, taken from the saved trace.\n")
     present = [s for s in SIGNALS if any(r[s[0]] is not None for r in rows)]

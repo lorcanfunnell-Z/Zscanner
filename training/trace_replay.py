@@ -13,11 +13,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 L = None   # the loaded session's scans (set by main() or by a caller after load())
 META = json.load(open(os.path.join(ROOT, "app/model6/meta.json")))
 zm = lambda k: "z" if k and k.startswith("z") else k
-E = {"or99": 1, "printshare": .8, "logic": "shell"}   # rule E: the live decision rule (app/model6/meta.json)
+E = {"or99": 1, "printshare": .8, "logic": "shell"}   # rule E: the decision rule's checks (app/model6/meta.json)
+LIVE = {**E, "stop": 5000}   # what the phone really runs: rule E, and past app/app.js's 5 s deadline no answer at all
 # The FIRST row of "new" mode is what tools/check.sh step 4 diffs against training/baseline-ruleE.txt, so it must be
-# the rule the phone really runs. Until 13 Nov it was plain E, while the phone had been running E plus the 5 s forced
-# guess (app/app.js HARD_DEADLINE_MS, live since 3 Nov) - so the baseline was under-counting wrong answers.
-NEW_RULES = [("E + 5s forced guess (LIVE on the phone since 3 Nov)", {**E, "deadline": 5000}),
+# the rule the phone really runs. Until 13 Nov it was plain E, while the phone had been running E plus a 5 s forced
+# guess (live since 3 Nov) - so the baseline was under-counting wrong answers.
+NEW_RULES = [("E + 5s stop: not certain by then = no answer, choices offered (LIVE since 13 Nov)", LIVE),
+             ("E + 5s forced guess (live 3-13 Nov)", {**E, "deadline": 5000}),
              ("E alone, no deadline (step 4 measured this until 13 Nov)", E),
              ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
              ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
@@ -78,11 +80,16 @@ def run(rule, K=3, detail=False, L=None):
                 shell_ok = META["shellOf"].get(top) == "milkwhite" or vote("shell") == META["shellOf"].get(top)
                 ok = ok and shell_ok
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
-            forced = rule.get("deadline") and f["t"] >= rule["deadline"] and len(win) >= 3   # test (3 Nov): hard cutoff, answer with the current top guess
+            forced = rule.get("deadline") and f["t"] >= rule["deadline"] and len(win) >= 3   # 3-13 Nov: hard cutoff, answer with the current top guess
             if (ok and tp >= .5 and tp - sp >= .2) or forced:
                 said = top; at = f["t"] - held[0]["t"]
                 seen = {"top": top, "tp": tp, "sp": sp, "win": list(win), "held": list(held), "agree": bool(agree), "forced": bool(forced)}
                 break
+            # 13 Nov: past the deadline the phone stops WITHOUT answering (camera off, likeliest three offered as chips) -
+            # the same cutoff as "deadline" above, but counted as not answered. As with "deadline", the clock here runs
+            # from the first held frame of the trace; the phone's restarts if the chocolate jumps (resetHold), a small
+            # difference the replay has never modelled.
+            if rule.get("stop") and f["t"] >= rule["stop"] and len(win) >= 3: break
         out.append((r["truth"], said, at if said else None))
         full.append({"truth": r["truth"], "said": said, "at": at if said else None, "scan": r, "held": list(held), "seen": seen})
     if detail == "full": return full

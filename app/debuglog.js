@@ -56,7 +56,7 @@
     tallyLine();
     const rows = await all(), labelled = rows.filter(r => r.correct !== undefined && r.correct !== null);
     const right = labelled.filter(r => r.correct).length, wrong = labelled.filter(r => r.type === "answer" && !r.correct).length;
-    const none = labelled.filter(r => r.type === "noanswer").length;
+    const none = labelled.filter(r => r.type === "noanswer" || r.type === "unsure" || r.type === "retry").length;   // unsure (13 Nov): not certain by the 5 s deadline, choices offered - not an answer, never counts as wrong
     panel.querySelector("#tlStats").innerHTML = `
       <div><b>${labelled.length}</b><span>scans</span></div><div><b>${right}</b><span>right</span></div>
       <div><b>${wrong}</b><span>wrong</span></div><div><b>${labelled.length ? Math.round(100 * right / labelled.length) : 0}%</b><span>accuracy</span></div>`
@@ -93,7 +93,7 @@
   function numbers(e) {
     const t = a => (a || []).map(x => `${name(x.key)} ${x.p}%`).join(" · ");
     return `<table>
-      <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : e.type === "retry" ? "No answer within 5 s (client is asked to try again)" : "No answer (you closed the camera)"}</td></tr>
+      <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : e.type === "unsure" ? "No answer: not certain within 5 s, the likeliest three were offered" : e.type === "retry" ? "No answer within 5 s (client is asked to try again)" : "No answer (you closed the camera)"}</td></tr>
       <tr><td>Average over the hold</td><td>${t(e.avgTop3)}</td></tr>
       <tr><td>Last frame alone</td><td>${t(e.nowTop3)}</td></tr>
       <tr><td>Shell colour seen</td><td>${e.shell}</td></tr>
