@@ -5,7 +5,8 @@
 #   3. the quality check for model 6 must match the saved baseline (training/baseline-model6.txt) - an older family
 #      of candidate rules from training/eval_combo.js, kept for comparing raw signal strength, NOT what the phone
 #      actually decides.
-#   4. the LIVE decision rule (rule E, training/trace_replay.py - exactly what the phone actually runs) must match
+#   4. the LIVE decision rule (the first row of `training/trace_replay.py tests/<S> new` - rule E plus the phone's
+#      5 s deadline; until 13 Nov this took plain rule E and so under-counted wrong answers) must match
 #      its own saved baseline (training/baseline-ruleE.txt) on every held-back session listed in
 #      training/sessions.json. This is the one that actually reflects real answered/wrong behaviour.
 #   If you changed the model, gallery or decision logic ON PURPOSE and the new numbers are better, save both

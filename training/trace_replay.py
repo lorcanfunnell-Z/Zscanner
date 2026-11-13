@@ -14,13 +14,16 @@ L = None   # the loaded session's scans (set by main() or by a caller after load
 META = json.load(open(os.path.join(ROOT, "app/model6/meta.json")))
 zm = lambda k: "z" if k and k.startswith("z") else k
 E = {"or99": 1, "printshare": .8, "logic": "shell"}   # rule E: the live decision rule (app/model6/meta.json)
-NEW_RULES = [("E (current production rule: model6 meta.json)", E),
+# The FIRST row of "new" mode is what tools/check.sh step 4 diffs against training/baseline-ruleE.txt, so it must be
+# the rule the phone really runs. Until 13 Nov it was plain E, while the phone had been running E plus the 5 s forced
+# guess (app/app.js HARD_DEADLINE_MS, live since 3 Nov) - so the baseline was under-counting wrong answers.
+NEW_RULES = [("E + 5s forced guess (LIVE on the phone since 3 Nov)", {**E, "deadline": 5000}),
+             ("E alone, no deadline (step 4 measured this until 13 Nov)", E),
              ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
              ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
              ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
              ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
-             ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45}),
-             ("E + 5s hard deadline (3 Nov test)", {**E, "deadline": 5000})]
+             ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45})]
 
 def load(session_dir):   # the scans a replay can use: labelled, with a trace
     return [r for r in json.load(open(os.path.join(session_dir, "test-log.json"))) if r.get("truth") and r.get("trace")]
