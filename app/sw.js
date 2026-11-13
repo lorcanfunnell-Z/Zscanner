@@ -2,8 +2,8 @@
 // Bump VERSION whenever a page/code file changes so phones pick up the new version.
 // Bump MODEL_VERSION only when a model file changes: models are big (several MB) and are loaded from the phone
 // after the first visit (cache first), so a second visit doesn't download them again.
-const VERSION = "scanner-v53";   // 13 Nov: no forced guess at the deadline, admin tilt permission inside the tap, tray taps no longer touch the gallery
-const MODEL_VERSION = "models-6.1.3";   // 3 Nov: zmilk reference photos added (1393 -> 1409 references), see CLAUDE.md
+const VERSION = "scanner-v54";   // 13 Nov (eight-fixes): rotation re-check, camera opens while models load, smaller precache, packed gallery, exam mode
+const MODEL_VERSION = "models-6.1.4";   // 13 Nov: the gallery is downloaded as 16-bit gallery.bin + gallery.pack.json (same 1409 references)
 // choc3d/ (the 3D result-card mesh + materials, 3 Nov) treated the same as a model: large, static once published,
 // only ever needed after a chocolate is identified - cache once and keep, rather than refetching every visit.
 const isModel = url => /\/(model\d+\/|vendor\/tf\.min\.js|vendor\/mnv2\/|choc3d\/)/.test(url) && !/meta\.json/.test(url);   // settings (meta.json) always fresh
