@@ -13,7 +13,7 @@
 //    shipped model uses that path any more, so it was removed rather than kept as unreachable code.)
 // The admin page runs the newest candidate model; the client page keeps the proven one until a fair test says otherwise.
 window.Recognizer = (() => {
-  const DIR = "model6";   // model 6.1 + rules E and A on both pages since 26 Oct 2026 (model4/ kept as a fallback)
+  const DIR = "model6";   // model 6.1 + rule E on both pages (rule A removed 28 Oct 2026; model4/ kept as a fallback)
   let finder = null, reader = null, quarter = null, printer = null, gallery = null, meta = null, loading = null;
   const S = 224;
   const LOOKS_MAX = 4;   // most extra finder passes per frame when looking again around its own box (see scan())

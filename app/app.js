@@ -23,7 +23,7 @@
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
   const TILT_HINT_DEG = 25; // phone's own gyroscope: degrees away from lying flat before we nudge "hold it flatter" — a first guess, to refine once real sessions show what's helpful
   const IDK_AFTER_MS = 2000; // after the hold, this long without an answer → say what would help (live on both pages: model6's meta.json sets candidate:true for each)
-  const HARD_DEADLINE_MS = 5000; // test (3 Nov): never let a scan run longer than this from first seeing a chocolate - past it, answer with the current best guess instead of continuing to wait (N20/N23 ran 42-104s with no answer at all before this)
+  const HARD_DEADLINE_MS = 5000; // never let a scan run longer than this from the first usable frame. 3-13 Nov: past it the current best guess was answered (N20/N23 had run 42-104 s with no answer before that); since 13 Nov: no answer, "not certain" and the likeliest three offered - see loop()
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
@@ -294,7 +294,7 @@
         // seen, but not readable: don't count this frame, and say what to do
         lastSeen = t0; showMark(r, 0);
         const reason = tooSmall ? "tooSmall" : tooDark ? "tooDark" : glare ? "glare" : "blurry";
-        $("#hint").textContent = tooSmall ? "Move a little closer" : tooDark ? "Too dark, find more light" : glare ? "Tilt slightly to avoid the reflection" : "Too blurry, hold steady";
+        $("#hint").textContent = tooSmall ? "Move a little closer" : tooDark ? "Too dark, find more light" : glare ? "Move slightly to avoid the reflection" : "Too blurry, hold steady";
         if (DEBUG) {
           $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}% obj ${r.obj.toFixed(2)}`;
           if (rejected.length < 400) rejected.push({ t: Math.round(t0 - scanStart), reason, sharp: Math.round(r.sharp), size: +r.box.size.toFixed(3),

@@ -8,7 +8,7 @@ sales, placement until March 2027) with Claude. This guide is for whoever looks 
 
 | Page | Address | Who | Model |
 | --- | --- | --- | --- |
-| Client page | `…/Zscanner/app/` | Gift recipients | model 6.1 + rules E and A (since 26 Oct 2026) |
+| Client page | `…/Zscanner/app/` | Gift recipients | model 6.1 + rule E (rule A removed 28 Oct 2026) |
 | Admin page | `…/Zscanner/admin.html` (passcode) | zChocolat staff only | the same model + all testing tools |
 
 The site is hosted free on **GitHub Pages** from the repository `lorcanfunnell-Z/Zscanner`. Pushing to it (GitHub
