@@ -58096,7 +58096,7 @@
   {
     "n": 27,
     "at": "2026-11-13T15:02:30.101Z",
-    "note": "Test 12",
+    "note": "Test 12 | truth corrected 22->23 on 13 Nov: the saved close-up shows N\u00b023 (a mis-tap when labelling; scan 26 is the real N\u00b022). The photos stay under closeup/22 and camera/22, where the export put them.",
     "type": "answer",
     "guess": "16",
     "avgTop3": [
@@ -61262,7 +61262,7 @@
       }
     ],
     "rejected": [],
-    "truth": "22",
+    "truth": "23",
     "correct": false
   },
   {

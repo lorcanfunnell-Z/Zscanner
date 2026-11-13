@@ -25,5 +25,5 @@ scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,
 24,2026-11-13T15:01:53.202Z,"Test 12",answer,16,20,false,16,51.5,20,42.1,milk,two,9,5.1,5.1
 25,2026-11-13T15:02:05.693Z,"Test 12",answer,16,21,false,16,40.5,9,37.1,milk,two,9,5.1,5.1
 26,2026-11-13T15:02:18.959Z,"Test 12",answer,22,22,true,22,77.6,16,14.6,milk,two,9,5.1,5.1
-27,2026-11-13T15:02:30.101Z,"Test 12",answer,16,22,false,16,60.2,20,25.1,milk,two,9,5.0,5.1
+27,2026-11-13T15:02:30.101Z,"Test 12 | truth corrected 22->23 on 13 Nov (mis-tap; the photo shows N°23)",answer,16,23,false,16,60.2,20,25.1,milk,two,9,5.0,5.1
 28,2026-11-13T15:02:49.409Z,"Test 12",answer,24,24,true,24,55.9,16,30.2,milk,two,9,5.1,5.1
