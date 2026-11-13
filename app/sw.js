@@ -2,7 +2,7 @@
 // Bump VERSION whenever a page/code file changes so phones pick up the new version.
 // Bump MODEL_VERSION only when a model file changes: models are big (several MB) and are loaded from the phone
 // after the first visit (cache first), so a second visit doesn't download them again.
-const VERSION = "scanner-v54";   // 13 Nov (eight-fixes): rotation re-check, camera opens while models load, smaller precache, packed gallery, exam mode
+const VERSION = "scanner-v55";   // 13 Nov: settle gate - the hold and the 5 s clock start only once the view has stayed still over what was found
 const MODEL_VERSION = "models-6.1.4";   // 13 Nov: the gallery is downloaded as 16-bit gallery.bin + gallery.pack.json (same 1409 references)
 // choc3d/ (the 3D result-card mesh + materials, 3 Nov) treated the same as a model: large, static once published,
 // only ever needed after a chocolate is identified - cache once and keep, rather than refetching every visit.

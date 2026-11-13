@@ -60,6 +60,25 @@ const { edgeAngle } = require("../training/align_lib.js");
   ok((afterFix.byMark["5"] || 0) === (mid.byMark["5"] || 0) + 1 && afterFix.total === mid.total + 1 - (autoReinforced ? 1 : 0)
      && (!autoReinforced || afterFix.byMark["21"] === mid.byMark["21"] - 1),
      `"Choose the number instead" then a tap moves the reinforcement (N°5 +1${autoReinforced ? ", N°21 -1" : ""}; ${mid.total} -> ${afterFix.total} references)`);
+  // 13 Nov: the live scan loop itself, on a static picture fed to the page as if it were the camera - the settle gate
+  // must open, the hold must run and rule E must answer within the 5 s deadline. Headless Chromium has no camera, so
+  // getUserMedia is replaced by a canvas stream showing app/images/18.jpg (the same picture the photo upload reads).
+  const live = await c.evaluate(async () => {
+    const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = "images/18.jpg"; });
+    const cv = document.createElement("canvas"); cv.width = cv.height = 640; cv.getContext("2d").drawImage(img, 0, 0, 640, 640);
+    navigator.mediaDevices.getUserMedia = async () => cv.captureStream(15);
+    const hints = new Set(); const watch = setInterval(() => hints.add(document.querySelector("#hint").textContent), 50);
+    document.querySelector("#camBtn").click();
+    const t0 = performance.now(); let status = "";
+    while (performance.now() - t0 < 9000) {
+      status = document.querySelector("#status").textContent.trim();
+      if (/Found|certain/.test(status)) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    clearInterval(watch);
+    return { status: status || "(no result within 9 s)", ms: Math.round(performance.now() - t0), settled: [...hints].some(h => /Hold still/.test(h)) };
+  });
+  ok(/N°18/.test(live.status), `live scan loop on a static picture: ${live.status} after ${live.ms} ms (settle gate seen: ${live.settled})`);
   ok(errs.length === 0, `no page errors${errs.length ? ": " + errs.join("; ") : ""}`);
   await b.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

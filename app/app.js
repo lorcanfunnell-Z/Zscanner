@@ -15,6 +15,8 @@
   // Recognition settings
   const HOLD_MS = 1000;     // hold the camera over the chocolate this long before it decides
   const MOVE_LIMIT = 0.22;  // if the chocolate moves more than this (share of the view), the hold restarts
+  const SETTLE_MOVE = 0.15; // settle gate (13 Nov): the last three frames, over at least SETTLE_SPAN_MS, must sit within this of each other before the hold and the 5 s clock start
+  const SETTLE_SPAN_MS = 150, SETTLE_MAX_MS = 1000;   // ...or found continuously this long with no jump counts as settled (the finder's box jitters; never wait longer than this)
   const DECIDE = 0.65;      // average score over the held second needed to answer
   const MARGIN = 0.30;      // ...and this far ahead of the second guess
   const MIN_SHARP = 45;     // close-ups less sharp than this are skipped (the number can't be read)
@@ -216,7 +218,7 @@
     if (!(await ready)) { stopCamera("Scan a chocolate"); return; }   // the models could not load: the status line says what to do instead
     if (!stream) return;                                               // the camera was closed while the models were still loading
     setStatus(""); $("#hint").textContent = "Point the camera at one chocolate";
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null; fixing = false;
+    held = []; settle = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null; fixing = false;
     loop();
     // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -
     // which on iOS also means it is outside the tap and never granted (see requestTiltPermission). The admin page asks
@@ -256,6 +258,7 @@
   const mark = $("#mark");
   const DEBUG = window.ZADMIN === true;   // live numbers + test log only on the admin page
   let held = [], holdStart = 0;            // frames collected during the current hold
+  let settle = [];                         // frames seen before the hold starts (settle gate, 13 Nov)
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
   let firstClearSeen = 0;   // live on both pages: first frame that actually passed the quality gate (not just detected) - the deadline clock starts here, not at first detection, so an initial blurry/focus-hunting stretch doesn't eat into the budget
@@ -287,7 +290,25 @@
     viewer.classList.add("locked");
     setTimeout(() => { stopCamera(); render(key, { scanned: true, vec, reinforcedAs }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
-  function resetHold(t) { held = []; holdStart = t; firstClearSeen = 0; }
+  function resetHold(t) { held = []; holdStart = t; firstClearSeen = 0; settle = []; }
+  // Settle gate (13 Nov). Nothing starts - no hold, no 5 s clock - until the view has stayed roughly still over whatever
+  // the finder found: the last three frames, spanning at least SETTLE_SPAN_MS, within SETTLE_MOVE of each other, or
+  // found continuously for SETTLE_MAX_MS with no jump. Why: the finder says "found" far too easily (an empty desk
+  // scores 99%), so a camera switched on facing the ceiling used to start the hold and the clock on the room, and a
+  // tester arriving at the chocolate a second later found the 5 s budget already partly spent. Measured on the saved
+  // sessions: at these settings the gate opens a median 0.3 s after the first usable frame and never after the phone's
+  // own answer; the one-second valve bounds the cost on a jittery box. Returns true while still settling.
+  function settling(r, t0) {
+    if (held.length) return false;   // already holding: the in-hold jump rule above takes over
+    const prev = settle[settle.length - 1];
+    if (prev && Math.hypot(r.box.cx - prev.cx, r.box.cy - prev.cy) > MOVE_LIMIT) settle = [];   // jumped: start settling again
+    settle.push({ t: t0, cx: r.box.cx, cy: r.box.cy }); settle = settle.filter(f => t0 - f.t <= SETTLE_MAX_MS + 200);
+    const last = settle.slice(-3);
+    const steady = last.length === 3 && last[2].t - last[0].t >= SETTLE_SPAN_MS && last.every(f => Math.hypot(f.cx - last[0].cx, f.cy - last[0].cy) <= SETTLE_MOVE);
+    const longEnough = t0 - settle[0].t >= SETTLE_MAX_MS;
+    if (steady || longEnough) { settle = []; return false; }
+    return true;
+  }
 
   function loop() {
     if (!stream) return;
@@ -308,6 +329,15 @@
           if (rejected.length < 400) rejected.push({ t: Math.round(t0 - scanStart), reason, sharp: Math.round(r.sharp), size: +r.box.size.toFixed(3),
             light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null, obj: +r.obj.toFixed(3),
             looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null });   // look-again: extra finder passes, and the box size before them
+        }
+      } else if (r.found && settling(r, t0)) {
+        // settle gate: the view is still moving over whatever the finder found - show the box, start nothing yet
+        lastSeen = t0; showMark(r, 0);
+        $("#hint").textContent = "Hold still over the chocolate";
+        if (DEBUG) {
+          $("#hint").textContent += ` | settling ${settle.length}f ${Math.round(t0 - settle[0].t)}ms | obj ${r.obj.toFixed(2)}`;
+          if (rejected.length < 400) rejected.push({ t: Math.round(t0 - scanStart), reason: "settling", sharp: Math.round(r.sharp), size: +r.box.size.toFixed(3),
+            light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null, obj: +r.obj.toFixed(3) });
         }
       } else if (r.found) {
         lastSeen = t0;
