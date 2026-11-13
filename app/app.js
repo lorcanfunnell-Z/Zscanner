@@ -131,8 +131,9 @@
   async function ensureModel() {
     if (Recognizer.ready) return true;
     setStatus(`<span class="dot"></span><span>Preparing the scanner…</span>`);
-    // show how far along it is, so the wait never looks frozen (first visit downloads ~7 MB)
-    const prog = p => { if (!Recognizer.ready) setStatus(`<span class="dot"></span><span>Preparing the scanner… ${Math.round(p * 100)}%</span>`); };
+    // show how far along it is, so the wait never looks frozen (first visit downloads ~8 MB of models); when the
+    // camera is already open (13 Nov: it opens while the models download) the viewfinder's hint shows it too
+    const prog = p => { if (!Recognizer.ready) { const t = `Preparing the scanner… ${Math.round(p * 100)}%`; setStatus(`<span class="dot"></span><span>${t}</span>`); if (!viewer.hidden) $("#hint").textContent = t; } };
     try { await Recognizer.load(prog); setStatus(""); return true; }
     catch (e) { console.error(e); setStatus("The scanner could not start. Please choose your number below.", "err"); return false; }
   }
@@ -191,7 +192,10 @@
   if (!canLive) $("#camLabel").textContent = "Take a photo";
 
   async function startCamera() {
-    if (!(await ensureModel())) return;
+    // 13 Nov: open the camera straight away and prepare the scanner at the same time, instead of making a first-time
+    // visitor stare at a progress line for the whole ~8 MB download before the viewfinder even appears. The hint in
+    // the viewfinder shows the progress; scanning starts the moment the models are ready.
+    const ready = Recognizer.ready ? Promise.resolve(true) : ensureModel();
     try {
       // advanced constraints are best-effort: a browser/device that doesn't support focusMode just ignores it,
       // never errors - safe to always ask, though iOS Safari's own support for this is known to be unreliable
@@ -207,8 +211,11 @@
     setupTorchButton();
     viewer.hidden = false; viewer.classList.remove("locked");
     $(".actions").hidden = true;
-    $("#hint").textContent = "Point the camera at one chocolate";
-    setStatus(""); $("#suggest").hidden = true;
+    $("#hint").textContent = Recognizer.ready ? "Point the camera at one chocolate" : "Preparing the scanner…";
+    $("#suggest").hidden = true;
+    if (!(await ready)) { stopCamera("Scan a chocolate"); return; }   // the models could not load: the status line says what to do instead
+    if (!stream) return;                                               // the camera was closed while the models were still loading
+    setStatus(""); $("#hint").textContent = "Point the camera at one chocolate";
     held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null; fixing = false;
     loop();
     // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -

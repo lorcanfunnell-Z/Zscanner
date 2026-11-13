@@ -7,12 +7,15 @@ const MODEL_VERSION = "models-6.1.3";   // 3 Nov: zmilk reference photos added (
 // choc3d/ (the 3D result-card mesh + materials, 3 Nov) treated the same as a model: large, static once published,
 // only ever needed after a chocolate is identified - cache once and keep, rather than refetching every visit.
 const isModel = url => /\/(model\d+\/|vendor\/tf\.min\.js|vendor\/mnv2\/|choc3d\/)/.test(url) && !/meta\.json/.test(url);   // settings (meta.json) always fresh
+// 13 Nov: only what the client page needs before its first scan is fetched up front. The admin files, jszip and the
+// 28 fallback photos (0.73 MB together, of a ~10 MB first visit) used to be precached too; they are still cached the
+// first time they are actually used (network first, below), so the only change is that a result card viewed offline
+// before that photo was ever fetched shows no fallback picture.
 const FILES = [
-  "./", "index.html", "styles.css", "app.js", "recognizer.js", "choc3d.js", "install.js", "idbstore.js", "collect.js", "debuglog.js", "admin.html", "admin.js", "vendor/jszip.min.js", "manifest.webmanifest",
+  "./", "index.html", "styles.css", "app.js", "recognizer.js", "choc3d.js", "install.js", "idbstore.js", "hooks-config.js", "hooks.js", "manifest.webmanifest",
   "data/chocolates.js",   // models (model6) are saved on the phone the first time they load (cache first, below)
-  "vendor/tf.min.js", 
-  "icons/icon-192.png", "icons/apple-touch-icon.png",
-  ...["zdark", "zmilk", "zwhite", ...Array.from({ length: 25 }, (_, i) => String(i))].map(k => `images/${k}.jpg`)
+  "vendor/tf.min.js",
+  "icons/icon-192.png", "icons/apple-touch-icon.png"
 ];
 self.addEventListener("install", e => e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(
