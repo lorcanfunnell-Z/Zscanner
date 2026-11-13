@@ -42,6 +42,24 @@ const { edgeAngle } = require("../training/align_lib.js");
   ok(await c.evaluate(() => Recognizer.model) === "model6", "client page runs model 6");
   ok(!(await c.$(".adminbar")) && !(await c.$("section.tl")) && (await c.$$(".hk, .hk-heart, .hk-tasting")).length === 0, "client page: no admin tools, no hooks");
   ok(/Found|certain/.test(cr["21"]), `client photo upload responds: ${cr["21"]}`);
+  // 13 Nov: a plain tray tap after an automatic answer must leave the gallery alone; only "Choose the number instead"
+  // (#fixBtn) followed by a tap is a correction, and that one moves the scan's reinforcement to the tapped number.
+  // Client page on purpose: reinforcement is off on the admin page (DEBUG), so only here can the gallery change at all.
+  const counts = () => c.evaluate(() => Recognizer._galleryCounts());
+  const before = await counts();                                   // the last upload above (N°21) is the current automatic answer
+  await c.click('#grid .key[data-k="5"]');
+  const afterPlain = await counts();
+  ok(JSON.stringify(afterPlain) === JSON.stringify(before), `plain tray tap leaves the gallery unchanged (${before.total} references)`);
+  await c.setInputFiles("#photoInput", "app/images/21.jpg");      // a fresh automatic answer, so there is something to correct
+  await c.waitForFunction(() => !/Reading/.test(document.querySelector("#status").textContent), null, { timeout: 300000 });
+  const mid = await counts(), fixBtn = await c.$("#fixBtn");
+  ok(!!fixBtn, "result card offers 'Choose the number instead'");
+  if (fixBtn) { await fixBtn.click(); await c.click('#grid .key[data-k="5"]'); }
+  const afterFix = await counts();
+  const autoReinforced = (mid.byMark["21"] || 0) === (before.byMark["21"] || 0) + 1;   // the upload itself may have reinforced N°21 at the top tier
+  ok((afterFix.byMark["5"] || 0) === (mid.byMark["5"] || 0) + 1 && afterFix.total === mid.total + 1 - (autoReinforced ? 1 : 0)
+     && (!autoReinforced || afterFix.byMark["21"] === mid.byMark["21"] - 1),
+     `"Choose the number instead" then a tap moves the reinforcement (N°5 +1${autoReinforced ? ", N°21 -1" : ""}; ${mid.total} -> ${afterFix.total} references)`);
   ok(errs.length === 0, `no page errors${errs.length ? ": " + errs.join("; ") : ""}`);
   await b.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

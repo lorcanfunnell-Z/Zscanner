@@ -284,5 +284,7 @@ window.Recognizer = (() => {
   const snapCan = document.createElement("canvas"); snapCan.width = snapCan.height = S; const snapCtx = snapCan.getContext("2d");
   const snapshot = () => snapCan.toDataURL("image/jpeg", 0.85);
 
-  return { load, scan, scanPhoto, snapshot, reinforce, unreinforce, _edgeAngleOf, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
+  // read-only, for tools/browser_smoke.js: how many references the gallery holds right now, in total and per mark
+  const _galleryCounts = () => { const byMark = {}; let total = 0; for (const [m, v] of Object.entries((gallery && gallery.byMark) || {})) { byMark[m] = v.length; total += v.length; } return { total, byMark }; };
+  return { load, scan, scanPhoto, snapshot, reinforce, unreinforce, _edgeAngleOf, _galleryCounts, get meta() { return meta; }, get hasPrints() { return !!printer; }, get times() { return times; }, get loadMs() { return loadMs; }, get model() { return DIR; }, get ready() { return !!reader && loadMs > 0; }, get backend() { return tf.getBackend(); } };
 })();

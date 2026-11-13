@@ -50,10 +50,12 @@
 
   // ---------- Result card ----------
   // The most recent automatic answer's chocoprint, kept so an explicit correction can move its reinforcement to the
-  // right chocolate — via ANY tray tap, not only the "choose the number instead" link (the tray is always visible,
-  // so most real corrections never use that link at all). reinforcedAs is which gallery mark (if any) this vec was
-  // auto-reinforced into, so a correction can undo that specific reinforcement, not just add a new one on top.
+  // right chocolate. Since 13 Nov a correction is "Choose the number instead" followed by a tray tap; a plain tray
+  // tap is just browsing and leaves the gallery alone (before, any tap counted). reinforcedAs is which gallery mark
+  // (if any) this vec was auto-reinforced into, so a correction can undo that specific reinforcement, not just add
+  // a new one on top.
   let lastScan = null;   // {key, vec, reinforcedAs}
+  let fixing = false;    // "Choose the number instead" was tapped: the next tray tap corrects lastScan (13 Nov; before, any tray tap did)
   function render(key, opts = {}) {
     const c = C[key]; if (!c) return;
     if (opts.scanned) lastScan = { key, vec: opts.vec || null, reinforcedAs: opts.reinforcedAs || null };
@@ -97,7 +99,7 @@
     // the three Z chocolates share one gallery mark, so picking a different shell colour here wouldn't actually
     // change what's in the gallery (it would just remove and re-add the identical chocoprint) — nothing to reinforce
     document.querySelectorAll(".zbtn").forEach(b => b.onclick = () => render("z" + b.dataset.z, { ...opts, keepScroll: true }));
-    const fix = $("#fixBtn"); if (fix) fix.onclick = () => $("#grid").scrollIntoView({ behavior: "smooth", block: "center" });
+    const fix = $("#fixBtn"); if (fix) fix.onclick = () => { fixing = true; $("#grid").scrollIntoView({ behavior: "smooth", block: "center" }); };   // the next tray tap is a correction
     document.querySelectorAll(".key").forEach(k => k.setAttribute("aria-current", String(k.dataset.k === key || (k.dataset.k === "z" && !!c.z))));
     if (!opts.example && !opts.keepScroll) $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
     // for hooks.js (welcome offer, tasting list, corporate counting); repeat = the same result redrawn (e.g. Z colour change)
@@ -112,15 +114,16 @@
     const k = e.target.closest(".key"); if (!k) return;
     setStatus(""); $("#suggest").hidden = true;
     const key = k.dataset.k === "z" ? "zdark" : k.dataset.k;
-    // any tap here right after an automatic answer is an explicit correction of it, however the person got to the
-    // tray — not only via "choose the number instead" (the tray is always visible too). Move the reinforcement
-    // rather than just adding to it: undo whatever the automatic answer wrongly reinforced, then reinforce the
-    // chocolate actually confirmed.
-    if (!DEBUG && lastScan && lastScan.vec && key !== lastScan.key) {
+    // 13 Nov: only a tap that follows "Choose the number instead" (#fixBtn) is a correction of the automatic answer.
+    // Until now ANY tray tap after an answer counted as one, so a curious tap on another number quietly filed that
+    // scan's chocoprint under the tapped number for the rest of the visit. A correction moves the reinforcement
+    // rather than adding to it: undo whatever the automatic answer wrongly reinforced, then reinforce the chocolate
+    // actually confirmed. A plain tray tap never touches the gallery.
+    if (fixing && !DEBUG && lastScan && lastScan.vec && key !== lastScan.key) {
       if (lastScan.reinforcedAs) Recognizer.unreinforce(lastScan.reinforcedAs, lastScan.vec);
       Recognizer.reinforce(key, lastScan.vec);
     }
-    lastScan = null;
+    fixing = false; lastScan = null;
     render(key);
   };
 
@@ -206,7 +209,7 @@
     $(".actions").hidden = true;
     $("#hint").textContent = "Point the camera at one chocolate";
     setStatus(""); $("#suggest").hidden = true;
-    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null;
+    held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null; fixing = false;
     loop();
     // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -
     // which on iOS also means it is outside the tap and never granted (see requestTiltPermission). The admin page asks
@@ -399,7 +402,7 @@
   // ---------- Single photo (works without live camera access) ----------
   async function fromPhoto(file) {
     if (!file || !(await ensureModel())) return;
-    lastScan = null;   // a fresh photo attempt shouldn't let an unrelated earlier scan's correction window stay open
+    lastScan = null; fixing = false;   // a fresh photo attempt shouldn't let an unrelated earlier scan's correction window stay open
     const url = URL.createObjectURL(file);
     setStatus(`<img class="thumb" src="${url}" alt=""><span class="dot"></span><span>Reading your chocolate…</span>`);
     const img = new Image();
