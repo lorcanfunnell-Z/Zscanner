@@ -23,6 +23,7 @@ say "2. Self-tests"
 # nothing at all and the self-test results were invisible. Same macOS-vs-GNU sed trap as the baseline diff bug.
 node training/selftest.js 2>/dev/null | sed -nE '/ok|FAIL|passed/p' || FAIL=1
 node training/selftest.js >/dev/null 2>&1 || FAIL=1
+node tools/pack_gallery.js --check || FAIL=1   # 13 Nov: the phone downloads a 16-bit packed copy of gallery.json - it must never lag behind
 say "3. Quality check vs baseline (about a minute)"
 tools/fair_check.sh check app/model6/reader/model.json app/model6 >/dev/null 2>&1
 NOW=$(sed -n '3,$p' experiments/fair-check-check.txt | sed -E 's/check-(rec|held)/X-\1/')

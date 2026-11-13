@@ -35,7 +35,9 @@ window.Recognizer = (() => {
       const models = await Promise.all(parts.map((u, i) => tf.loadLayersModel(u + "/model.json", { onProgress: f => { frac[i] = f; tick(); } })));
       [finder, reader] = models; quarter = meta.align || meta.print ? models[2] : null; printer = meta.print ? models[3] : null;
       if (meta.print) {   // Stage 3: reference gallery
-        gallery = await fetch(DIR + "/gallery.json").then(r => r.json());
+        // 13 Nov: the phone downloads the packed copy (tools/pack_gallery.js: 16-bit floats, ~0.37 MB) rather than the
+        // 1.16 MB JSON the tools use; gallery.json is still the fallback if a model folder has no packed copy
+        gallery = await loadGallery();
         gallery.byMark = {}; gallery.entries.forEach(([m, v]) => (gallery.byMark[m] = gallery.byMark[m] || []).push(v));
         // chocolates added from the admin page (custom-chocolates.json): their prints join the gallery under their own key
         try { const cu = await fetch("custom-chocolates.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null);
@@ -50,6 +52,17 @@ window.Recognizer = (() => {
     return loading;
   }
 
+  // The reference gallery as the phone downloads it: gallery.pack.json (marks, zoom, gray, the mark of each entry) plus
+  // gallery.bin (every chocoprint as 16-bit floats, little-endian), decoded here into the same {marks, zoom, gray,
+  // entries: [[mark, vector], ...]} shape gallery.json has. Falls back to gallery.json when the packed copy is absent.
+  const fromHalf = h => { const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, m = h & 0x3ff; return e === 0 ? s * m * Math.pow(2, -24) : e === 31 ? (m ? NaN : s * Infinity) : s * (1 + m / 1024) * Math.pow(2, e - 15); };
+  async function loadGallery() {
+    const idx = await fetch(DIR + "/gallery.pack.json").then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!idx) return fetch(DIR + "/gallery.json").then(r => r.json());
+    const buf = new DataView(await fetch(DIR + "/gallery.bin").then(r => r.arrayBuffer()));
+    const entries = idx.entryMarks.map((m, i) => { const v = new Float32Array(idx.dim); for (let k = 0; k < idx.dim; k++) v[k] = fromHalf(buf.getUint16((i * idx.dim + k) * 2, true)); return [m, v]; });
+    return { marks: idx.marks, zoom: idx.zoom, gray: idx.gray, entries };
+  }
   // draw a square region of the source (may extend past the edges) onto the 224×224 canvas,
   // optionally turned clockwise by rot degrees about its centre (extra margin is drawn so corners stay filled)
   function grab(source, x, y, size, rot = 0) {
