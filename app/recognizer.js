@@ -192,7 +192,7 @@ window.Recognizer = (() => {
     grab(source, x, y, side).dispose();
     snapCtx.drawImage(canvas, 0, 0);   // keep the standard close-up (whole chocolate, as seen) for the test log and gallery
     const sharp = sharpness(), lit = light(); lap("crop + sharpness");
-    let pid, psh, pmk, rot = 0, qsure = 1, resolvedPrint = null;
+    let pid, psh, pmk, rot = 0, qsure = 1, qraw = null, resolvedPrint = null;
     if (!quarter) {
       [pid, psh, pmk] = readAt(source, x, y, side, 0);
       if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 } };   // model4 fallback: still worth reusing the box
@@ -200,26 +200,39 @@ window.Recognizer = (() => {
       [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
       const e = reuse && prev.e != null ? prev.e : edgeAngle(); lap("straighten (edges)");   // same box as last frame → same angle
       const de = prev ? Math.abs(((e - prev.e) % 90 + 135) % 90 - 45) : 99;   // change in angle since last frame (mod 90)
+      // 13 Nov: a remembered rotation is only trusted while the chocoprint keeps matching well. Three of the seven
+      // wrong answers in test-6/7 (13 read as 15, 4 as 7, 22 as 16) were clean overhead shots where the rotation
+      // chosen on the first frame - 180° off in two of them - was reused for every frame of the scan, while the
+      // chocoprint named the true chocolate at the other rotation. So when the last frame's match was weak, the
+      // quarter model runs again and the chocoprint judges the remembered rotation against the fresh one and its
+      // opposite, instead of one early frame deciding the whole scan.
+      const weak = recent && prev && prev.psim != null && prev.psim < 0.9;
       let qorder;
-      if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8) { qorder = [prev.q]; qsure = prev.qsure; }   // same way up as a moment ago
+      if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8 && !weak) { qorder = [prev.q]; qsure = prev.qsure; }   // same way up as a moment ago
       else {
         const sqd = grab(source, x, y, side, -e);
         const pq = tf.tidy(() => quarter.predict(sqd.expandDims(0))).dataSync(); sqd.dispose();
-        qorder = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a]); qsure = pq[qorder[0]];
+        qorder = [0, 1, 2, 3].sort((a, b) => pq[b] - pq[a]); qsure = qraw = pq[qorder[0]];   // qraw: the model's own confidence, logged separately (qsure gets resolved to 1 below)
       }
       let q = qorder[0]; rot = -e + 90 * q; lap("which side is up");
       // unsure which way is up: don't hand the chocoprint (80% of the final decision) a single untested guess.
       // Try the two likeliest rotations and keep whichever actually looks like a real reference — a wrongly-turned
       // crop won't match anything, so the chocoprint itself is a better judge of "which way up" than the quarter
-      // model's own confidence here.
-      if (qsure < 0.9 && printer && qorder.length > 1) {
-        const tries = [q, qorder[1]].map(qq => { const r = -e + 90 * qq; return { q: qq, rot: r, pr: computePrint(source, x, y, side, r) }; });
+      // model's own confidence here. (13 Nov: also after a weak match, between the fresh choice, its opposite and
+      // the remembered one.)
+      let cands = null;
+      if (printer) {
+        if (qsure < 0.9 && qorder.length > 1) cands = [q, qorder[1]];
+        else if (weak) cands = [...new Set([q, (q + 2) % 4, prev.q])].filter(v => v != null);
+      }
+      if (cands && cands.length > 1) {
+        const tries = cands.map(qq => { const r = -e + 90 * qq; return { q: qq, rot: r, pr: computePrint(source, x, y, side, r) }; });
         const best = tries.sort((a, b) => b.pr.sim - a.pr.sim)[0];
         // remember the orientation the chocoprint actually settled on, not the quarter model's rejected raw guess —
         // otherwise a cached reuse on the very next frame would silently revert to the wrong rotation
         rot = best.rot; q = best.q; qsure = 1; resolvedPrint = best.pr; lap("which side is up (chocoprint check)");
       }
-      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 }, e, q, qsure };
+      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 }, e, q, qsure, psim: null };
     }
     let ranked = combine(pid, psh, pmk), print = null; const m4top = ranked[0].key;
     if (printer) {
@@ -230,13 +243,14 @@ window.Recognizer = (() => {
       const prod = ranked.map(r => ({ key: r.key, p: r.p * pm(r.key) })), t = prod.reduce((a, b) => a + b.p, 0) || 1;
       const order = Object.entries(sims).sort((a, b) => b[1] - a[1]);
       print = { mark: order[0][0], sim: order[0][1], gap: order[0][1] - order[1][1], vec: Array.from(v) };
+      if (opts.track && prev) prev.psim = print.sim;   // how well this frame matched: the next frame decides from it whether to trust the remembered rotation
       ranked = prod.map(r => ({ key: r.key, p: r.p / t })).sort((a, b) => b.p - a.p);
       // an added chocolate isn't known to the classifier, so it is recognised by its print alone, and only when clearly closest
       if ((gallery.custom || []).includes(print.mark) && print.sim >= 0.6 && print.gap >= 0.08)
         ranked = [{ key: print.mark, p: 0.9 }, ...ranked.map(r => ({ key: r.key, p: r.p * 0.1 }))];
       lap("gallery compare");
     }
-    return { found: true, obj, box, looks, size1: bs1, sharp, light: lit, rot, qsure, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+    return { found: true, obj, box, looks, size1: bs1, sharp, light: lit, rot, qsure, qraw, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
   // Like Face ID folding a good unlock back into its template: when a scan is answered at the highest confidence

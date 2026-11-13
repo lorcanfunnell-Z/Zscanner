@@ -265,7 +265,8 @@
     window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart),
       seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null,
       clearMs: firstClearSeen ? Math.round(performance.now() - firstClearSeen) : null,   // time since the first frame good enough to actually use - compare with seenMs to see how much was lost to initial blur/focus-hunting
-      tiltPermission, trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
+      tiltPermission, loadMs: Math.round(Recognizer.loadMs || 0),   // how long the scanner took to be ready this visit (download + warm-up), never saved anywhere before 13 Nov
+      trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
@@ -315,7 +316,9 @@
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
             sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, obj: +r.obj.toFixed(3), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null,
-            looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]) });   // looks/size1: the look-again's extra finder passes and the box size before them
+            looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null, top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]),   // looks/size1: the look-again's extra finder passes and the box size before them
+            qraw: r.qraw != null ? +r.qraw.toFixed(2) : null,   // 13 Nov: the which-way-up model's own confidence on the frames it actually ran on (null = rotation reused); qsure is the resolved value
+            vec: r.print?.vec ? r.print.vec.map(v => +v.toFixed(3)) : null });   // 13 Nov: this frame's chocoprint, so a replay can rescore the live rule against a changed gallery (e.g. reinforcement on vs off)
         }
         const holdMs = META.holdMs ?? HOLD_MS;   // model 6: 0.4 s (replay: 3 frames already gave 0 wrong)
         held = held.filter((f, i) => t0 - f.t <= holdMs * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
