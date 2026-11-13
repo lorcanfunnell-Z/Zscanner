@@ -257,6 +257,14 @@
   // given only if the winner's shell colour matches what most frames saw (the logic check).
   const mark = $("#mark");
   const DEBUG = window.ZADMIN === true;   // live numbers + test log only on the admin page
+  // The build this page is running: VERSION and MODEL_VERSION live in sw.js (the one place they are declared), so the
+  // admin page reads them from there and shows them in the test log, where every entry records them too (13 Nov).
+  const BUILD = { version: null, models: null };
+  window.ZBUILD = BUILD;
+  if (DEBUG) fetch("sw.js", { cache: "no-store" }).then(r => r.text()).then(t => {
+    BUILD.version = (t.match(/const VERSION = "([^"]+)"/) || [])[1] || "unknown"; BUILD.models = (t.match(/const MODEL_VERSION = "([^"]+)"/) || [])[1] || "unknown";
+    window.dispatchEvent(new CustomEvent("zbuild", { detail: { ...BUILD } }));
+  }).catch(() => { BUILD.version = BUILD.models = "unknown"; window.dispatchEvent(new CustomEvent("zbuild", { detail: { ...BUILD } })); });
   let held = [], holdStart = 0;            // frames collected during the current hold
   let settle = [];                         // frames seen before the hold starts (settle gate, 13 Nov)
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
@@ -276,6 +284,7 @@
       seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null,
       clearMs: firstClearSeen ? Math.round(performance.now() - firstClearSeen) : null,   // time since the first frame good enough to actually use - compare with seenMs to see how much was lost to initial blur/focus-hunting
       tiltPermission, loadMs: Math.round(Recognizer.loadMs || 0),   // how long the scanner took to be ready this visit (download + warm-up), never saved anywhere before 13 Nov
+      build: { ...BUILD, model: Recognizer.model },   // 13 Nov: which build the phone was running - test-12 was scanned on an old cached build without anyone knowing
       trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {

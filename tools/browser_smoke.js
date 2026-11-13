@@ -25,6 +25,8 @@ const { edgeAngle } = require("../training/align_lib.js");
   };
   const a = await ctx.newPage(), ar = await run(a, "http://localhost:8767/admin.html", true);
   ok(await a.evaluate(() => Recognizer.model) === "model6", "admin page runs model 6");
+  await a.waitForFunction(() => /scanner-v\d+/.test(document.querySelector("#tlBuild")?.textContent || ""), null, { timeout: 20000 }).catch(() => {});
+  ok(/scanner-v\d+ · models-[\d.]+ · model6/.test(await a.textContent("#tlBuild")), `admin page shows the build: ${(await a.textContent("#tlBuild")).trim()}`);
   ok(/N°18/.test(ar["18"]) && /N°21/.test(ar["21"]), `admin photo upload: ${ar["18"]} / ${ar["21"]}`);
   // recognizer.js's inlined straightening maths vs training/align_lib.js's copy: deliberately duplicated (one reads
   // a canvas, the other a raw buffer) with nothing else checking they stay in sync as the maths evolves

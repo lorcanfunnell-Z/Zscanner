@@ -44,6 +44,7 @@
   document.querySelector("main.page").prepend(panel);
   panel.innerHTML = `
     <h3>Test log</h3>
+    <p id="tlBuild" style="margin:-6px 0 0;font-size:13px;color:var(--muted)">Build: reading…</p>
     <div><label for="tlNote">Place and light (saved with each scan)</label><input id="tlNote" placeholder="e.g. office desk, daylight, in the box" value="${esc(getNote())}"></div>
     <div class="stats" id="tlStats"></div>
     <p id="tlTally" style="margin:0;font-size:13px;color:var(--text)"></p>
@@ -54,6 +55,10 @@
     <button class="tl-link" id="tlClear" type="button">Clear the test log</button>
     <button class="tl-link" id="tlExamReset" type="button" hidden>Start the exam list again from scan 1</button>`;
   panel.querySelector("#tlNote").oninput = e => setNote(e.target.value);
+  // which build this phone is running, read from sw.js by app.js (13 Nov): check it before every session
+  const showBuild = b => { panel.querySelector("#tlBuild").textContent = `Build: ${b.version || "?"} · ${b.models || "?"} · ${(window.Recognizer && Recognizer.model) || "?"}`; };
+  if (window.ZBUILD && window.ZBUILD.version) showBuild(window.ZBUILD);
+  window.addEventListener("zbuild", e => showBuild(e.detail));
 
   // ---------- exam mode (13 Nov, see training/exam-session-brief.md) ----------
   // The truth is entered BEFORE each scan, from a shuffled list the page deals: all 28 chocolates, 11 times each,
@@ -118,7 +123,7 @@
   window.addEventListener("zscan", async e => {
     const d = e.detail;
     const entry = { n: ++n, at: new Date().toISOString(), note: getNote(), type: d.type, guess: d.guess, avgTop3: d.avgTop3, nowTop3: d.nowTop3,
-      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced, tiltPermission: d.tiltPermission, loadMs: d.loadMs,
+      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced, tiltPermission: d.tiltPermission, loadMs: d.loadMs, build: d.build,
       trace: d.trace || [], rejected: d.rejected || [], crop: d.crop, frame: d.frame, truth: null, correct: null };
     const nx = examNext();
     if (nx) {   // exam mode: the truth was decided before the scan - save at once, no tap needed
@@ -194,8 +199,8 @@
     const zip = new JSZip();
     const data = rows.map(({ crop, frame, ...rest }) => rest);
     zip.file("test-log.json", JSON.stringify(data, null, 2));
-    const csv = ["scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s"].concat(data.map(r =>
-      [r.n, r.at, JSON.stringify(r.note || ""), r.type, r.guess || "", r.truth || "", r.correct, r.avgTop3?.[0]?.key, r.avgTop3?.[0]?.p, r.avgTop3?.[1]?.key, r.avgTop3?.[1]?.p, r.shell, r.mark, r.frames, (r.holdMs / 1000).toFixed(1), (r.ms / 1000).toFixed(1)].join(",")));
+    const csv = ["scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s,version,models,model"].concat(data.map(r =>
+      [r.n, r.at, JSON.stringify(r.note || ""), r.type, r.guess || "", r.truth || "", r.correct, r.avgTop3?.[0]?.key, r.avgTop3?.[0]?.p, r.avgTop3?.[1]?.key, r.avgTop3?.[1]?.p, r.shell, r.mark, r.frames, (r.holdMs / 1000).toFixed(1), (r.ms / 1000).toFixed(1), r.build?.version || "", r.build?.models || "", r.build?.model || ""].join(",")));
     zip.file("test-log.csv", csv.join("\n"));
     const b64 = u => u && u.split(",")[1];
     rows.forEach(r => {
