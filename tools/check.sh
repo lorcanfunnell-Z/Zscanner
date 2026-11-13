@@ -12,7 +12,9 @@
 #   If you changed the model, gallery or decision logic ON PURPOSE and the new numbers are better, save both
 #   baselines: tools/check.sh --update-baseline
 #   5. (optional, --browser) the client and admin pages open and identify chocolates in a headless browser
-# Usage: tools/check.sh [--browser] [--update-baseline]
+# Usage: tools/check.sh [--browser] [--photo] [--update-baseline]
+#   --photo (13 Nov): also runs tools/photo_check.js - the single-photo path over every held-back close-up and camera
+#   frame in headless Chromium (about 6 minutes), diffed against training/baseline-photo.txt
 cd "$(dirname "$0")/.."
 FAIL=0; say() { printf "\n== %s\n" "$1"; }
 say "1. JavaScript parses"
@@ -53,5 +55,10 @@ if [ "$1" = "--browser" ] || [ "$2" = "--browser" ]; then
   for _ in $(seq 1 40); do curl -sf -o /dev/null http://localhost:8767/index.html && break; sleep 0.25; done
   node tools/browser_smoke.js 2>/dev/null || FAIL=1
   kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null
+fi
+if [ "$1" = "--photo" ] || [ "$2" = "--photo" ] || [ "$3" = "--photo" ]; then
+  say "6. Single-photo path vs baseline (about 6 minutes)"
+  UPD=""; { [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ] || [ "$3" = "--update-baseline" ]; } && UPD="--update-baseline"
+  node tools/photo_check.js $UPD 2>/dev/null || FAIL=1
 fi
 echo; [ $FAIL = 0 ] && echo "ALL CHECKS PASSED" || { echo "SOME CHECKS FAILED"; exit 1; }

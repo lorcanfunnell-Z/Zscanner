@@ -1,0 +1,4 @@
+closeup: 112 scans, found 112, too dark 0, answered 95, wrong 7 11→10 20→21 20→24 19→13 zdark→5 6→9 7→4| chips 17 (truth among them 15)
+  vs the live rule: verdict: can't tell from this many scans   (wrong answers 7 -> 7 became wrong 6, stopped being wrong 6 exact McNemar p = 1.0000)
+camera: 112 scans, found 112, too dark 1, answered 80, wrong 3 20→21 19→13 zdark→5| chips 31 (truth among them 25)
+  vs the live rule: verdict: can't tell from this many scans   (wrong answers 7 -> 3 became wrong 2, stopped being wrong 6 exact McNemar p = 0.2891)
