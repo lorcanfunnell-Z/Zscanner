@@ -42,8 +42,15 @@ has been scored.
 
 ## How to run a sitting (75 to 100 scans, 30 to 45 minutes)
 
-- **Shuffle.** Don't go through the tray in order. Deal the chocolates out like cards, or draw numbers, so that no
-  sequence can help the scanner or you. The 3 Nov vision-chat test showed how much a predictable order flatters a result.
+- **Switch on Exam mode** in the admin page's Test log panel (added 13 Nov). It deals the whole exam for you: a
+  shuffled list of all 28 chocolates eleven times each, shown one at a time as "Scan next: N°13 (5 of 308)". The
+  truth is filled in from that list before you scan, right or wrong is worked out from the scanner's answer, and the
+  scan is saved on its own; the only tap you ever need is "I scanned something else" when you picked up the wrong
+  chocolate. This replaces tapping the truth after the answer, which is how the N°21/N°22 mis-tap happened. The list
+  is kept on the phone, so you can stop and carry on at the next sitting where you left off.
+- **Shuffle** is therefore done for you. If you ever run a sitting without Exam mode, deal the chocolates out like
+  cards so that no sequence can help the scanner or you: the 3 Nov vision-chat test showed how much a predictable
+  order flatters a result.
 - **One chocolate at a time, on the table, overhead, normal distance.** The same as a client holding a phone over a
   box. No flash, no deliberate tilt, no arm's-length shots — those are separate hard-case sessions and must not be
   mixed in here.
@@ -60,6 +67,31 @@ has been scored.
 
 Four sittings of about 77 scans cover all 28 chocolates 11 times (308 scans). Three sittings of about 100 also work.
 Each chocolate should appear in every sitting at least twice, so that light and position vary for all of them.
+
+## Twenty "not a chocolate" shots (added 13 Nov)
+
+Nothing on disk shows what the scanner does with something that is not a zChocolat chocolate, and the one empty
+desk frame we have is "found" at 99% with a chocoprint match as strong as a real answer. So at the end of one
+sitting, point the camera at about twenty things a gift recipient might plausibly point it at, and label each one
+**Nothing** in the test log (a button added 13 Nov, next to the numbers):
+
+- the empty tray or box, with and without the paper
+- a chocolate's wrapper or the gift card, flat on the table
+- your hand, empty, and your hand holding something else
+- a chocolate from a different brand, if one is to hand, and a biscuit or a coin
+- the table itself, the napkin alone, the laptop keyboard
+
+For a Nothing shot the right outcome is "no answer"; any answer counts as wrong. These scans are scored separately
+from the 308 and are the first evidence for a "this is not one of ours" message.
+
+## Does the exam test what clients run?
+
+Not exactly, and the brief would be dishonest not to say so. The admin page runs the same models, gallery and decision
+rule as the client page, but two things differ: automatic reinforcement (a confident answer's chocoprint joining the
+gallery for the rest of the visit) is **off** on the admin page and **on** for clients, and the tilt-sensor prompt is
+**on** for the admin page and **off** for clients. Reinforcement changed no outcome in the offline replay of test-4
+to test-7 (13 Nov), so the exam measures the models and the rule, which is what it is for; whether reinforcement
+should stay on for clients is a separate decision, still Lorcan's.
 
 ## What happens to the zips
 

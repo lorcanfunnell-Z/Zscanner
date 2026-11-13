@@ -5,7 +5,7 @@
   if (window.ZADMIN !== true) return;
   const C = window.CHOCOLATES;
   const KEYS = [...Array.from({ length: 25 }, (_, i) => String(i)), "zdark", "zmilk", "zwhite"];
-  const name = k => !k ? "nothing" : k.startsWith("z") ? C[k].name : "N°" + k;
+  const name = k => !k || k === "none" ? "nothing" : k.startsWith("z") ? C[k].name : "N°" + k;   // "none" (13 Nov): a deliberate not-a-chocolate shot
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // ---------- storage (IndexedDB, as plain data so iPhone Safari accepts it) ----------
@@ -47,16 +47,51 @@
     <div><label for="tlNote">Place and light (saved with each scan)</label><input id="tlNote" placeholder="e.g. office desk, daylight, in the box" value="${esc(getNote())}"></div>
     <div class="stats" id="tlStats"></div>
     <p id="tlTally" style="margin:0;font-size:13px;color:var(--text)"></p>
+    <div><label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font:400 14px var(--sans);color:var(--text)"><input type="checkbox" id="tlExam" style="width:auto"> Exam mode: scan from a shuffled list, the truth filled in for you</label>
+      <p id="tlNext" style="margin:6px 0 0;font:500 16px var(--serif);color:var(--ink)"></p></div>
     <div id="tlCurrent"></div>
     <button class="btn btn-dark" id="tlZip" type="button">Download test log (.zip)</button>
-    <button class="tl-link" id="tlClear" type="button">Clear the test log</button>`;
+    <button class="tl-link" id="tlClear" type="button">Clear the test log</button>
+    <button class="tl-link" id="tlExamReset" type="button" hidden>Start the exam list again from scan 1</button>`;
   panel.querySelector("#tlNote").oninput = e => setNote(e.target.value);
+
+  // ---------- exam mode (13 Nov, see training/exam-session-brief.md) ----------
+  // The truth is entered BEFORE each scan, from a shuffled list the page deals: all 28 chocolates, 11 times each,
+  // 308 scans. Right or wrong is worked out from the scanner's answer and the scan is saved by itself; the only tap
+  // ever needed is "I scanned something else". This replaces tapping the truth after seeing the answer, which is how
+  // the test-7 N°21/N°22 mis-tap happened, and it makes a predictable scanning order impossible. The list lives on
+  // the phone, so a sitting can stop and the next one carries on where it left off.
+  const EXAM = "zscanner-exam-v1", EXAM_EACH = 11;
+  const getExam = () => { try { return JSON.parse(localStorage.getItem(EXAM)) || null; } catch { return null; } };
+  const setExam = x => { try { localStorage.setItem(EXAM, JSON.stringify(x)); } catch {} };
+  const examOn = () => panel.querySelector("#tlExam").checked;
+  function dealExam() {
+    const q = []; for (let i = 0; i < EXAM_EACH; i++) q.push(...KEYS);
+    for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [q[i], q[j]] = [q[j], q[i]]; }   // Fisher-Yates
+    const x = { queue: q, pos: 0, dealt: new Date().toISOString() }; setExam(x); return x;
+  }
+  function examNext() {   // the chocolate to scan next, or null when the list is done / exam mode is off
+    if (!examOn()) return null;
+    const x = getExam() || dealExam(); return x.pos < x.queue.length ? { key: x.queue[x.pos], pos: x.pos, total: x.queue.length } : null;
+  }
+  function showNext() {
+    const nx = examNext(), p = panel.querySelector("#tlNext"), r = panel.querySelector("#tlExamReset");
+    r.hidden = !examOn();
+    p.textContent = !examOn() ? "" : nx ? `Scan next: ${name(nx.key)}   (${nx.pos + 1} of ${nx.total})` : "Exam list finished - every chocolate scanned 11 times. Nothing shots next, or start the list again below.";
+  }
+  panel.querySelector("#tlExam").onchange = showNext;
+  let examArmed = false;
+  panel.querySelector("#tlExamReset").onclick = ev => {
+    if (!examArmed) { examArmed = true; ev.target.textContent = "Tap again to deal a fresh list and forget the position"; return; }
+    dealExam(); examArmed = false; ev.target.textContent = "Start the exam list again from scan 1"; showNext();
+  };
+  showNext();
 
   async function stats() {
     tallyLine();
     const rows = await all(), labelled = rows.filter(r => r.correct !== undefined && r.correct !== null);
     const right = labelled.filter(r => r.correct).length, wrong = labelled.filter(r => r.type === "answer" && !r.correct).length;
-    const none = labelled.filter(r => r.type === "noanswer" || r.type === "unsure" || r.type === "retry").length;   // unsure (13 Nov): not certain by the 5 s deadline, choices offered - not an answer, never counts as wrong
+    const none = labelled.filter(r => r.type === "noanswer" || r.type === "unsure").length;   // unsure (13 Nov): not certain by the 5 s deadline, choices offered - not an answer, never counts as wrong
     panel.querySelector("#tlStats").innerHTML = `
       <div><b>${labelled.length}</b><span>scans</span></div><div><b>${right}</b><span>right</span></div>
       <div><b>${wrong}</b><span>wrong</span></div><div><b>${labelled.length ? Math.round(100 * right / labelled.length) : 0}%</b><span>accuracy</span></div>`
@@ -85,15 +120,37 @@
     const entry = { n: ++n, at: new Date().toISOString(), note: getNote(), type: d.type, guess: d.guess, avgTop3: d.avgTop3, nowTop3: d.nowTop3,
       shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced, tiltPermission: d.tiltPermission, loadMs: d.loadMs,
       trace: d.trace || [], rejected: d.rejected || [], crop: d.crop, frame: d.frame, truth: null, correct: null };
-    await put(entry);
-    show(entry);
+    const nx = examNext();
+    if (nx) {   // exam mode: the truth was decided before the scan - save at once, no tap needed
+      const x = getExam(); x.pos = nx.pos + 1; setExam(x);
+      entry.truth = nx.key; entry.exam = nx.pos + 1; entry.correct = entry.type === "answer" && entry.guess === nx.key;
+      await put(entry); record(entry); await stats(); showNext();
+      showExam(entry, nx);
+    } else {
+      await put(entry);
+      show(entry);
+    }
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+
+  function showExam(e, nx) {
+    const cur = panel.querySelector("#tlCurrent"), after = examNext();
+    cur.innerHTML = `<div class="tl-card">
+      <strong>Scan ${e.n} (exam ${nx.pos + 1} of ${nx.total})</strong>
+      <div class="tl-pics"><div><img src="${e.frame}" alt=""><small>Camera view</small></div><div><img src="${e.crop}" alt=""><small>Close-up it read</small></div></div>
+      ${numbers(e)}
+      <span class="${e.correct ? "ok" : "bad"}">Expected ${esc(name(nx.key))}: ${e.correct ? "right" : e.type === "answer" ? `wrong, it said ${esc(name(e.guess))}` : "no answer"} - saved</span>
+      <div class="tl-row"><button class="btn btn-dark" id="tlNext" type="button">${after ? `Next: ${esc(name(after.key))}` : "Done"}</button><button class="btn btn-outline-dark" id="tlOther" type="button">I scanned something else</button></div></div>`;
+    cur.querySelector("#tlNext").onclick = () => { window.scrollTo({ top: 0, behavior: "smooth" }); if (after) document.getElementById("camBtn").click(); };
+    cur.querySelector("#tlOther").onclick = () => {   // the expected chocolate still needs scanning: step the list back, and label this scan by hand
+      const x = getExam(); x.pos = nx.pos; setExam(x); e.truth = null; e.correct = null; e.exam = null; showNext(); show(e);
+    };
+  }
 
   function numbers(e) {
     const t = a => (a || []).map(x => `${name(x.key)} ${x.p}%`).join(" · ");
     return `<table>
-      <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : e.type === "unsure" ? "No answer: not certain within 5 s, the likeliest three were offered" : e.type === "retry" ? "No answer within 5 s (client is asked to try again)" : "No answer (you closed the camera)"}</td></tr>
+      <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : e.type === "unsure" ? "No answer: not certain within 5 s, the likeliest three were offered" : "No answer (you closed the camera)"}</td></tr>
       <tr><td>Average over the hold</td><td>${t(e.avgTop3)}</td></tr>
       <tr><td>Last frame alone</td><td>${t(e.nowTop3)}</td></tr>
       <tr><td>Shell colour seen</td><td>${e.shell}</td></tr>
@@ -116,10 +173,12 @@
         : `<p style="margin:0">Which chocolate was it?</p>`}
       <div class="tl-grid" id="tlPick" ${e.type === "answer" ? "hidden" : ""}>
         ${KEYS.map(k => `<button type="button" data-k="${k}" class="${k.startsWith("z") ? "w" : ""}">${k.startsWith("z") ? C[k].name.replace(" Chocolate", "") : k}</button>`).join("")}
+        <button type="button" data-k="none" class="w">Nothing</button>
       </div></div>`;
+    // "none" (13 Nov): a deliberate not-a-chocolate shot - the right outcome is no answer, any answer is wrong
     const done = async (truth) => {
-      e.truth = truth; e.correct = e.type === "answer" && truth === e.guess; await put(e); record(e); await stats();
-      cur.innerHTML = `<div class="tl-card"><span class="${e.correct ? "ok" : "bad"}">Scan ${e.n} saved: ${e.correct ? "right" : e.type === "answer" ? `wrong, it was ${esc(name(truth))}` : `no answer, it was ${esc(name(truth))}`}</span>
+      e.truth = truth; e.correct = truth === "none" ? e.type !== "answer" : e.type === "answer" && truth === e.guess; await put(e); record(e); await stats();
+      cur.innerHTML = `<div class="tl-card"><span class="${e.correct ? "ok" : "bad"}">Scan ${e.n} saved: ${e.correct ? (truth === "none" ? "right, no answer for a nothing shot" : "right") : e.type === "answer" ? (truth === "none" ? `wrong, it said ${esc(name(e.guess))} but nothing was there` : `wrong, it was ${esc(name(truth))}`) : `no answer, it was ${esc(name(truth))}`}</span>
         <button class="btn btn-dark" id="tlNext" type="button">Scan the next chocolate</button></div>`;
       cur.querySelector("#tlNext").onclick = () => { window.scrollTo({ top: 0, behavior: "smooth" }); document.getElementById("camBtn").click(); };
     };
