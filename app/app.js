@@ -141,6 +141,10 @@
   // which is exactly how it is held to look straight down at a chocolate. Advisory only for now: it nudges the
   // on-screen hint, it never blocks a frame or an answer on its own.
   let tiltAngle = null, tiltGranted = false;
+  // 13 Nov: the outcome of the permission request, for the admin test log and hint - "not-asked", "granted", "denied",
+  // "no-api" (browser has no motion events), or the error name iOS rejected with. Until now the rejection was swallowed
+  // silently, which is how no saved session (test-4 to test-11) ever got a single tilt value: see requestTiltPermission.
+  let tiltPermission = "not-asked";
   function onTilt(e) { if (e.beta != null && e.gamma != null) tiltAngle = Math.hypot(e.beta, e.gamma); }
   // 4 Nov: was "ask once per page load, ever" - found via real test sessions that zero tilt data was ever
   // captured, because a single not-granted result (denied, dismissed, or some one-off glitch) permanently
@@ -149,16 +153,24 @@
   // resolves future requestPermission() calls instantly without showing the native prompt again, so a genuine
   // denial never turns into repeated nagging. This only gives a second (or third, etc.) chance to the cases
   // that weren't a deliberate, permanent no - a transient failure, a missed prompt, a timing glitch.
+  // WHERE this is called from decides whether it can ever work. iOS only shows the motion-permission prompt when
+  // DeviceOrientationEvent.requestPermission() runs inside a user gesture (a tap handler); called anywhere else it
+  // rejects with NotAllowedError ("requires a user gesture to prompt"). Version 1 (3 Nov 10:33) asked inside the
+  // Scan tap and worked, but queued the motion prompt in front of the camera one; the fix for that delay moved the
+  // call to after the camera stream starts - outside the gesture - so from then on every request was refused and the
+  // refusal swallowed, and the 4 Nov "retry on every scan" retried from the same wrong place. The admin page now asks
+  // inside the Scan tap again (see #camBtn); the client page is left as it was until a real session shows tilt is
+  // worth a second system prompt for a gift recipient.
   function requestTiltPermission() {
     if (tiltGranted) return;   // already working this session - nothing to re-ask
     const DOE = window.DeviceOrientationEvent;
-    if (!DOE) return;
-    // iOS needs an explicit, user-gesture-triggered permission prompt (same pattern as camera/mic); everywhere
-    // else (Android, desktop) the sensor just starts reporting
+    if (!DOE) { tiltPermission = "no-api"; return; }
     if (typeof DOE.requestPermission === "function") {
-      DOE.requestPermission().then(s => { if (s === "granted") { tiltGranted = true; window.addEventListener("deviceorientation", onTilt); } }).catch(() => {});
-    } else {
-      tiltGranted = true;
+      DOE.requestPermission()
+        .then(s => { tiltPermission = s; if (s === "granted") { tiltGranted = true; window.addEventListener("deviceorientation", onTilt); } })
+        .catch(e => { tiltPermission = (e && e.name) || "error"; });
+    } else {   // Android, desktop: no prompt, the sensor just reports (or doesn't exist, in which case no events arrive)
+      tiltPermission = "granted"; tiltGranted = true;
       window.addEventListener("deviceorientation", onTilt);
     }
   }
@@ -196,7 +208,10 @@
     setStatus(""); $("#suggest").hidden = true;
     held = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null;
     loop();
-    requestTiltPermission();   // advisory sensor only — asked after the camera is already streaming, so its permission dialog can never queue in front of the camera one and delay the scan starting
+    // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -
+    // which on iOS also means it is outside the tap and never granted (see requestTiltPermission). The admin page asks
+    // inside the tap instead (#camBtn), so it is not repeated here.
+    if (!DEBUG) requestTiltPermission();
   }
 
   function stopCamera(label = "Scan another") {
@@ -247,7 +262,7 @@
     window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart),
       seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null,
       clearMs: firstClearSeen ? Math.round(performance.now() - firstClearSeen) : null,   // time since the first frame good enough to actually use - compare with seenMs to see how much was lost to initial blur/focus-hunting
-      trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
+      tiltPermission, trace, rejected, crop: Recognizer.snapshot(), frame: frameShot() } }));
   }
   function showMark(r, progress) {
     if (!r || !r.found) { mark.hidden = true; return; }
@@ -325,7 +340,7 @@
           : mean(h => h.qsure) < 0.8 ? "Hold the phone straight above the number"
           : mean(h => h.sharp) < 80 ? "Hold steady for a moment" : "Hold a little closer, straight above the number";
         if (idk) $("#hint").textContent = idk;
-        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)} | tilt ${tiltAngle != null ? Math.round(tiltAngle) + "°" : "–"}`;
+        if (DEBUG) $("#hint").textContent = (idk ? idk + " | " : "") + `${Math.round(progress * 100)}% | now ${r.ranked.slice(0, 2).map(x => x.key + " " + Math.round(x.p * 100)).join(" · ")} | avg ${topKey} ${Math.round(topP * 100)} | ${shellVote} ${r.mark} | ${held.length}f | sharp ${Math.round(r.sharp)} | tilt ${tiltAngle != null ? Math.round(tiltAngle) + "°" : "– (" + tiltPermission + ")"}`;
         const markVote = lastInfo.mark;
         // rule "agree" (model 5): the classifier and the chocoprints, each voting over the held second, must name the same chocolate
         const vote = f => { const c = {}; held.forEach(h => { const k = f(h); if (k) c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
@@ -441,7 +456,9 @@
     offerChoices(keys, vec);
   }
 
-  $("#camBtn").onclick = () => canLive ? startCamera() : $("#photoInput").click();
+  // Admin page (13 Nov): ask for the tilt sensor synchronously INSIDE the tap - the only place iOS grants it. Two
+  // system prompts on the first scan is acceptable for staff; clients keep the single camera prompt for now.
+  $("#camBtn").onclick = () => { if (canLive && DEBUG) requestTiltPermission(); canLive ? startCamera() : $("#photoInput").click(); };
   $("#stopBtn").onclick = () => { report("noanswer", null); stopCamera("Scan a chocolate"); };
   $("#photoBtn").onclick = () => $("#photoInput").click();
   $("#photoInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; fromPhoto(f); };

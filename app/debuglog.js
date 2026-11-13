@@ -83,7 +83,7 @@
   window.addEventListener("zscan", async e => {
     const d = e.detail;
     const entry = { n: ++n, at: new Date().toISOString(), note: getNote(), type: d.type, guess: d.guess, avgTop3: d.avgTop3, nowTop3: d.nowTop3,
-      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced,
+      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced, tiltPermission: d.tiltPermission,
       trace: d.trace || [], rejected: d.rejected || [], crop: d.crop, frame: d.frame, truth: null, correct: null };
     await put(entry);
     show(entry);
@@ -97,6 +97,7 @@
       <tr><td>Average over the hold</td><td>${t(e.avgTop3)}</td></tr>
       <tr><td>Last frame alone</td><td>${t(e.nowTop3)}</td></tr>
       <tr><td>Shell colour seen</td><td>${e.shell}</td></tr>
+      <tr><td>Tilt sensor</td><td>${e.tiltPermission || "not recorded"}</td></tr>
       <tr><td>Mark seen</td><td>${{ one: "one digit", two: "two digits", z: "z" }[e.mark] || e.mark}</td></tr>
       <tr><td>Frames averaged</td><td>${e.frames} over ${(e.holdMs / 1000).toFixed(1)}s</td></tr>
       <tr><td>Time to answer</td><td>${(e.ms / 1000).toFixed(1)}s${e.seenMs != null ? ` (${(e.seenMs / 1000).toFixed(1)}s after the chocolate was first seen)` : ""}</td></tr>
