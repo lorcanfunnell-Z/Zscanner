@@ -12,7 +12,7 @@ const { readerCrop } = require("./lib/crops.js");
 const { loadData, attachRotations } = require("./lib/data.js");
 const { backbone, heads, copyWeights, saveRound, resumeRound } = require("./lib/models.js");
 const OUT = path.resolve(process.env.OUT || at("experiments/merged-new")), EPOCHS_R = +(process.env.EPOCHS_R || 14), BATCH = 32;
-const INIT = process.env.INIT || at("app/model4/reader/model.json");
+const INIT = process.env.INIT || at("app/model6/reader/model.json");   // 13 Nov: app/model4 was removed
 const hold = process.env.HOLD_TEST ? process.env.HOLD_TEST.split(",").filter(Boolean) : undefined;
 const { train } = loadData({ synth: true, tests: true, hold });
 
