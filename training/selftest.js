@@ -22,7 +22,7 @@ const v = Array.from({ length: 128 }, (_, i) => Math.sin(i)), n = Math.hypot(...
 const ps = printScores(u, [["18", u], ["19", w]]); ok(ps.perChocolate[IDS.indexOf("18")] > 0.99, "gallery comparison picks the matching reference");
 // fair-testing safeguard and files the phone needs
 const se = sessions(); ok(Array.isArray(se.heldBack) && se.heldBack.length >= 1 && !se.heldBack.some(s => se.inGallery.includes(s)), `at least one test session held back and not in the gallery (${se.heldBack.join(", ")})`);
-for (const m of ["model4", "model6"]) { const meta = path.join(ROOT, "app", m, "meta.json"); ok(fs.existsSync(meta), `app/${m}/meta.json exists`); }
+for (const m of ["model6"]) { const meta = path.join(ROOT, "app", m, "meta.json"); ok(fs.existsSync(meta), `app/${m}/meta.json exists`); }
 const gal = JSON.parse(fs.readFileSync(path.join(ROOT, "app/model6/gallery.json")));
 ok(gal.entries.length > 0 && gal.entries.every(([m, vv]) => vv.length === 128), `model 6 gallery: ${gal.entries.length} references, all 128 numbers`);
 for (const d of ["finder", "reader", "quarter", "print"]) ok(fs.existsSync(path.join(ROOT, "app/model6", d, "model.json")), `app/model6/${d} present`);

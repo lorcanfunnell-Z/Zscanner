@@ -38,7 +38,7 @@ Never put anything confidential on the admin page.
 6. **Decision** over 0.4 s (at least 3 frames): answer only if the reader and the chocoprint agree, or it is ≥ 99%
    sure; otherwise "I don't know" + a hint. The number tray is always there as a one-tap fallback.
 
-Both pages use `app/model6` (its `meta.json` holds the answering rules). `app/model4` is the older model (steps 1–3 only), kept as a fallback: to go back, set `DIR` in `recognizer.js` and the meta path in `app.js` to `model4`.
+Both pages use `app/model6` (its `meta.json` holds the answering rules). The older `app/model4` (steps 1–3 only) was never loaded by the live pages and was removed on 13 Nov 2026; git history has it if ever needed.
 
 ## 3. Folders
 

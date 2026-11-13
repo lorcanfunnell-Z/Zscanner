@@ -23,7 +23,7 @@ const { test, heldScans } = loadData({ synth: false, tests: false, hold });
 if (process.env.SCAN_DIR) { const from = path.resolve(ROOT, "tests") + path.sep, to = path.resolve(process.env.SCAN_DIR) + path.sep; for (const a of heldScans) a.file = a.file.replace(from, to); }
 
 (async () => {
-  const PR = path.resolve(process.env.PRINT), reader = await tf.loadLayersModel("file://" + path.resolve(process.env.READER || path.join(ROOT, "app/model4/reader/model.json")));
+  const PR = path.resolve(process.env.PRINT), reader = await tf.loadLayersModel("file://" + path.resolve(process.env.READER || path.join(ROOT, "app/model6/reader/model.json")));
   const pm = await tf.loadLayersModel("file://" + path.join(PR, "print", "model.json")), gal = JSON.parse(fs.readFileSync(path.join(PR, "gallery.json")));
   const gray = process.env.GRAY ? process.env.GRAY === "1" : !!gal.gray;
   const items = process.env.EVAL_SET === "rec" ? test.filter(a => a.cls !== "none" && Array.isArray(a.box)) : heldScans;

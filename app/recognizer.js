@@ -13,7 +13,7 @@
 //    shipped model uses that path any more, so it was removed rather than kept as unreachable code.)
 // The admin page runs the newest candidate model; the client page keeps the proven one until a fair test says otherwise.
 window.Recognizer = (() => {
-  const DIR = "model6";   // model 6.1 + rule E on both pages (rule A removed 28 Oct 2026; model4/ kept as a fallback)
+  const DIR = "model6";   // model 6.1 + rule E on both pages (rule A removed 28 Oct 2026; the old model4/ fallback was removed 13 Nov - git history has it)
   let finder = null, reader = null, quarter = null, printer = null, gallery = null, meta = null, loading = null;
   const S = 224;
   const LOOKS_MAX = 4;   // most extra finder passes per frame when looking again around its own box (see scan())
@@ -208,7 +208,7 @@ window.Recognizer = (() => {
     let pid, psh, pmk, rot = 0, qsure = 1, qraw = null, resolvedPrint = null;
     if (!quarter) {
       [pid, psh, pmk] = readAt(source, x, y, side, 0);
-      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 } };   // model4 fallback: still worth reusing the box
+      if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1 } };   // a model folder without a quarter model: still worth reusing the box
     } else {                                                   // reader reads as it is; straightening is only for the chocoprint
       [pid, psh, pmk] = readAt(source, x, y, side, 0); lap("reader");
       const e = reuse && prev.e != null ? prev.e : edgeAngle(); lap("straighten (edges)");   // same box as last frame → same angle

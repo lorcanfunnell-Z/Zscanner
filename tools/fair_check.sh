@@ -5,7 +5,7 @@
 # the D+ rule needs (replay of recorded sequences).
 #
 # Usage: tools/fair_check.sh <name> <reader model.json> <chocoprint folder (has print/ and gallery.json)> [held test, default: first in training/sessions.json]
-# Example (model 6): tools/fair_check.sh model6 app/model4/reader/model.json app/model6
+# Example (model 6): tools/fair_check.sh model6 app/model6/reader/model.json app/model6
 # Results also saved in experiments/fair-check-<name>.txt
 set -e
 cd "$(dirname "$0")/.."

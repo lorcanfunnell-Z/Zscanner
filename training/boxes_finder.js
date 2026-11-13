@@ -1,11 +1,11 @@
 // Marks where the chocolate is in round-2 collect photos (cam2_*.jpg = the whole camera view, any background)
 // using the trained finder, and adds the boxes to training-photos/boxes.json.
 // Photos where the finder isn't sure there's a chocolate are marked "skip" (except the "none" folder).
-// Usage: node training/boxes_finder.js [finder model.json]   (default app/model4/finder)
+// Usage: node training/boxes_finder.js [finder model.json]   (default app/model6/finder)
 const fs = require("fs"), path = require("path"), tf = require("@tensorflow/tfjs-node"), sharp = require("sharp");
 const ROOT = path.join(__dirname, ".."), P = path.join(ROOT, "training-photos"), S = 224;
 (async () => {
-  const finder = await tf.loadLayersModel("file://" + path.resolve(process.argv[2] || path.join(ROOT, "app/model4/finder/model.json")));
+  const finder = await tf.loadLayersModel("file://" + path.resolve(process.argv[2] || path.join(ROOT, "app/model6/finder/model.json")));
   const boxes = JSON.parse(fs.readFileSync(path.join(P, "boxes.json")));
   const todo = [];
   for (const k of fs.readdirSync(P)) {
