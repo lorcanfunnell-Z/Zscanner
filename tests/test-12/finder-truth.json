@@ -1,0 +1,171 @@
+{
+  "_comment": "Hand-measured boxes for camera/*.jpg (13 Nov 2026, test-12: bare dark striped wood, low direct sun, hard shadows, camera at an angle). [x0,y0,x1,y1] as fractions of the 320x320 camera square. Each box is the chocolate's NUMBER FACE only, measured by eye on a 4x coordinate grid - it excludes the lit far-side face visible as a pale band along the top of most chocolates, and the shadow to the lower right. Rough to about 0.01-0.02. Scan 27's files are under 22/ (exported before its label was corrected to 23).",
+  "zdark/scan1.jpg": [
+    0.37,
+    0.48,
+    0.46,
+    0.57
+  ],
+  "0/scan2.jpg": [
+    0.33,
+    0.44,
+    0.5,
+    0.62
+  ],
+  "1/scan3.jpg": [
+    0.24,
+    0.55,
+    0.42,
+    0.7
+  ],
+  "2/scan4.jpg": [
+    0.32,
+    0.42,
+    0.52,
+    0.62
+  ],
+  "3/scan5.jpg": [
+    0.33,
+    0.53,
+    0.51,
+    0.69
+  ],
+  "4/scan6.jpg": [
+    0.33,
+    0.54,
+    0.5,
+    0.72
+  ],
+  "5/scan7.jpg": [
+    0.26,
+    0.51,
+    0.42,
+    0.66
+  ],
+  "zwhite/scan8.jpg": [
+    0.29,
+    0.62,
+    0.45,
+    0.8
+  ],
+  "6/scan9.jpg": [
+    0.22,
+    0.5,
+    0.44,
+    0.68
+  ],
+  "7/scan10.jpg": [
+    0.3,
+    0.65,
+    0.5,
+    0.84
+  ],
+  "8/scan11.jpg": [
+    0.26,
+    0.57,
+    0.44,
+    0.76
+  ],
+  "9/scan12.jpg": [
+    0.3,
+    0.47,
+    0.52,
+    0.64
+  ],
+  "10/scan13.jpg": [
+    0.27,
+    0.59,
+    0.51,
+    0.78
+  ],
+  "11/scan14.jpg": [
+    0.33,
+    0.61,
+    0.55,
+    0.78
+  ],
+  "zmilk/scan15.jpg": [
+    0.29,
+    0.61,
+    0.49,
+    0.78
+  ],
+  "12/scan16.jpg": [
+    0.36,
+    0.61,
+    0.58,
+    0.78
+  ],
+  "13/scan17.jpg": [
+    0.28,
+    0.55,
+    0.52,
+    0.76
+  ],
+  "14/scan18.jpg": [
+    0.31,
+    0.65,
+    0.49,
+    0.84
+  ],
+  "15/scan19.jpg": [
+    0.28,
+    0.56,
+    0.46,
+    0.71
+  ],
+  "16/scan20.jpg": [
+    0.45,
+    0.5,
+    0.62,
+    0.66
+  ],
+  "17/scan21.jpg": [
+    0.28,
+    0.53,
+    0.46,
+    0.68
+  ],
+  "18/scan22.jpg": [
+    0.35,
+    0.4,
+    0.55,
+    0.6
+  ],
+  "19/scan23.jpg": [
+    0.28,
+    0.63,
+    0.46,
+    0.79
+  ],
+  "20/scan24.jpg": [
+    0.36,
+    0.62,
+    0.56,
+    0.8
+  ],
+  "21/scan25.jpg": [
+    0.28,
+    0.59,
+    0.48,
+    0.76
+  ],
+  "22/scan26.jpg": [
+    0.43,
+    0.71,
+    0.62,
+    0.86
+  ],
+  "22/scan27.jpg": [
+    0.31,
+    0.61,
+    0.52,
+    0.8
+  ],
+  "24/scan28.jpg": [
+    0.36,
+    0.67,
+    0.56,
+    0.86
+  ]
+}
