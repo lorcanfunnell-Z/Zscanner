@@ -61,6 +61,9 @@ has been scored.
   use the note field and say so; the scan stays in the log.
 - **Vary the ordinary things, not the difficult ones:** a different spot on the table, window light one sitting and
   lamp light another, a different chocolate on the card or beside it. Keep it to what a client would plausibly do.
+- **No direct sun across the chocolate.** Window light is fine; a beam of sun with hard shadows is not. Test-12
+  (13 Nov) showed direct sun turns dark shells pale to the reader and pulls the finder's box onto the shadow. If
+  the sun reaches the table, move the card or draw the blind, and say so in the note if a sitting ran in it anyway.
 - **Keep the sitting continuous.** If the page resets or the phone crashes, write it down and carry on; it is useful
   data in itself.
 - **Download the zip at the end of each sitting** and send it. One zip per sitting.
