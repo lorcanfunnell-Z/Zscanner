@@ -250,7 +250,9 @@ SIGNALS = [("psim_med", "high", "median chocoprint similarity over the frames he
            ("size_med", "high", "median box size (share of the view)"),
            ("sharp_min", "high", "lowest sharpness in the window"),
            ("looks", "low", "extra finder passes (look-again, 12 Nov) - only in sessions scanned after it shipped"),
-           ("size1", "high", "box size before the look-again - only in sessions scanned after it shipped")]
+           ("size1", "high", "box size before the look-again - only in sessions scanned after it shipped"),
+           ("gap_med", "high", "median chocoprint gap (top mark minus runner-up) over the frames held - only in sessions scanned after 16 Nov"),
+           ("gap_min", "high", "lowest chocoprint gap over the frames held - only in sessions scanned after 16 Nov")]
 MODEL_EXCLUDE = {"rejected"}   # a session marker, not a signal: zero for every test-4/5 scan simply because it was not logged then
 
 def scan_signals(f):
@@ -260,13 +262,15 @@ def scan_signals(f):
     ps = [h["psim"] for h in held if h.get("psim") is not None]
     q = [h["qsure"] for h in win if h.get("qsure") is not None]
     lk = [h["looks"] for h in held if h.get("looks") is not None]; s1 = [h["size1"] for h in held if h.get("size1") is not None]
+    gp = [h["gap"] for h in held if h.get("gap") is not None]
     return {"psim_med": med(ps), "psim_min": min(ps) if ps else None,
             "share_final": sum(1 for h in held if h["top"][0][0] == said) / len(held),
             "print_share": sum(1 for h in win if h.get("pmark") == tr.zm(said)) / len(win),
             "m4_share": sum(1 for h in win if tr.zm(h.get("m4top")) == tr.zm(said)) / len(win),
             "margin": seen["tp"] - seen["sp"], "duration": f["at"], "frames": len(held), "rejected": len(f["scan"].get("rejected") or []),
             "qsure_min": min(q) if q else None, "size_med": med([h["size"] for h in held]), "sharp_min": min(h["sharp"] for h in win),
-            "looks": max(lk) if lk else None, "size1": med(s1) if s1 else None}
+            "looks": max(lk) if lk else None, "size1": med(s1) if s1 else None,
+            "gap_med": med(gp), "gap_min": min(gp) if gp else None}
 
 def answered_scans(sessions):
     """Every rule-E-answered scan of these sessions with its signals and whether it was wrong."""

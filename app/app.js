@@ -378,7 +378,7 @@
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
-            sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, obj: +r.obj.toFixed(3), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null,
+            sharp: Math.round(r.sharp), light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, obj: +r.obj.toFixed(3), rot: r.rot != null ? Math.round(r.rot) : null, qsure: r.qsure != null ? +r.qsure.toFixed(2) : null, shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, psim: r.print ? +r.print.sim.toFixed(3) : null, gap: r.print ? +r.print.gap.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null,
             looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null, cx1: r.box1 ? +r.box1.cx.toFixed(3) : null, cy1: r.box1 ? +r.box1.cy.toFixed(3) : null,   // looks/size1/cx1/cy1: the look-again's extra finder passes and the first look's box before them
             top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]),
             qraw: r.qraw != null ? +r.qraw.toFixed(2) : null,   // 13 Nov: the which-way-up model's own confidence on the frames it actually ran on (null = rotation reused); qsure is the resolved value
