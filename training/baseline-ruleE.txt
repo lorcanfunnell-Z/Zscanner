@@ -2,3 +2,4 @@ test-4: E + 5s stop: not certain by then = no answer, choices offered (LIVE sinc
 test-5: E + 5s stop: not certain by then = no answer, choices offered (LIVE since 13 Nov) answered 27/27, wrong 0  | typical 0.8s after first seen | slow: 20:4.6s
 test-6: E + 5s stop: not certain by then = no answer, choices offered (LIVE since 13 Nov) answered 21/29, wrong 5 zdark→5 1→5 8→5 13→15 21→5 | typical 1.4s after first seen | slow: zdark:3.3s 2:3.6s 13:3.9s
 test-7: E + 5s stop: not certain by then = no answer, choices offered (LIVE since 13 Nov) answered 22/27, wrong 2 4→7 22→16 | typical 0.9s after first seen | slow: 1:4.0s 19:4.8s
+test-13: E + 5s stop: not certain by then = no answer, choices offered (LIVE since 13 Nov) answered 22/27, wrong 0  | typical 2.0s after first seen | slow: 4:4.8s zwhite:8.7s 8:3.9s 15:3.3s 19:4.8s 24:3.7s
