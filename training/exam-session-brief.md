@@ -69,6 +69,11 @@ has been scored.
 - **Download the zip at the end of each sitting** and send it. One zip per sitting.
 
 Four sittings of about 77 scans cover all 28 chocolates 11 times (308 scans). Three sittings of about 100 also work.
+
+**Chocolate age (decided 16 Nov):** the exam runs on fresh chocolates, all sittings within a day or two of each other.
+Aged chocolates are covered separately, after the exam: one ordinary 28-scan session on the old set (3-4 weeks old)
+to measure what age costs, then a reference round on the same pieces added to the gallery and fair-tested. The
+gallery stays as it is for the whole exam, so every sitting measures the same scanner.
 Each chocolate should appear in every sitting at least twice, so that light and position vary for all of them.
 
 ## Twenty "not a chocolate" shots (added 13 Nov)
