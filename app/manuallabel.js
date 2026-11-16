@@ -13,7 +13,10 @@
   const KEYS = [...Array.from({ length: 25 }, (_, i) => String(i)), "zdark", "zmilk", "zwhite", "none"];
   const SHORT = k => k === "none" ? "Nothing" : k === "zdark" ? "Z dark" : k === "zmilk" ? "Z milk" : k === "zwhite" ? "Z white" : k;
   const LONG = k => k === "none" ? "Nothing (no chocolate in view)" : C[k].z ? C[k].name : `N°${k} ${C[k].name}`;
-  const SIZE = 640;
+  // 16 Nov: photos are saved at the camera square's own size (capped), not scaled down to 640 px. At 640 a chocolate
+  // held at the usual distance came out 60-100 px across in the 12 Nov round, too small to judge a tight crop or
+  // a flattened number face; the oracle test of corner alignment needs the number face at about 270 px.
+  const MAX_SIZE = 1600;
 
   const tx = ZIdbStore.openStore("zscanner-manuallabel", "shots", { autoIncrement: true });
   const memory = []; let memoryOnly = false;
@@ -31,7 +34,7 @@
   const root = $("#ml"), screen = $("#mlScreen");
   const video = Object.assign(document.createElement("video"), { muted: true, autoplay: true, playsInline: true });
   video.setAttribute("playsinline", ""); video.setAttribute("muted", "");
-  const canvas = document.createElement("canvas"); canvas.width = canvas.height = SIZE;
+  const canvas = document.createElement("canvas");   // sized per shot in grabSquare
   const ctx = canvas.getContext("2d");
   let stream = null, shotBlob = null, shotUrl = null, count = 0;
 
@@ -46,7 +49,8 @@
   }
   function grabSquare() {
     const w = video.videoWidth, h = video.videoHeight, size = Math.min(w, h);
-    ctx.drawImage(video, (w - size) / 2, (h - size) / 2, size, size, 0, 0, SIZE, SIZE);
+    const out = Math.min(size, MAX_SIZE); canvas.width = canvas.height = out;
+    ctx.drawImage(video, (w - size) / 2, (h - size) / 2, size, size, 0, 0, out, out);
     return new Promise(r => canvas.toBlob(r, "image/jpeg", 0.88));
   }
   async function refreshCount() { count = (await allShots()).length; }
