@@ -25,7 +25,9 @@
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
   const TILT_HINT_DEG = 25; // phone's own gyroscope: degrees away from lying flat before we nudge "hold it flatter" — a first guess, to refine once real sessions show what's helpful
   const IDK_AFTER_MS = 2000; // after the hold, this long without an answer → say what would help (live on both pages: model6's meta.json sets candidate:true for each)
-  const HARD_DEADLINE_MS = 5000; // never let a scan run longer than this from the first usable frame. 3-13 Nov: past it the current best guess was answered (N20/N23 had run 42-104 s with no answer before that); since 13 Nov: no answer, "not certain" and the likeliest three offered - see loop()
+  const HARD_DEADLINE_MS = 5000; // the budget of USABLE frames a scan gets before it stops without answering ("not certain", the likeliest three offered - see loop()). 3-13 Nov: a wall-clock 5 s, past which the current best guess was answered (N20/N23 had run 42-104 s before that); 13-17 Nov: wall-clock, no answer past it; since 17 Nov (Lorcan's rule): usable frames only - a blurry or dark stretch pauses this clock instead of eating it. Replayed on 139 held-back scans: one more right answer, nothing new wrong
+  const USABLE_GAP_MS = 400;     // a gap between usable frames longer than this means frames were being rejected in between: only this much of it counts as usable time
+  const WAIT_CEILING_MS = 10000; // whatever the frames are doing, no scan runs longer than this from the first usable frame. Before 17 Nov the deadline was only checked when a frame passed the quality gates, so a scan whose frames kept failing them ran on (test-13 N°23: 12 s)
   const PHOTO_SURE = 0.55;  // single photos: show the top match above this, else offer choices
 
   const $ = s => document.querySelector(s);
@@ -218,7 +220,7 @@
     if (!(await ready)) { stopCamera("Scan a chocolate"); return; }   // the models could not load: the status line says what to do instead
     if (!stream) return;                                               // the camera was closed while the models were still loading
     setStatus(""); $("#hint").textContent = "Point the camera at one chocolate";
-    held = []; settle = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; trace = []; rejected = []; lastScan = null; fixing = false;
+    held = []; settle = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; usableMs = 0; lastUsable = 0; trace = []; rejected = []; lastScan = null; fixing = false;
     loop();
     // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -
     // which on iOS also means it is outside the tap and never granted (see requestTiltPermission). The admin page asks
@@ -270,6 +272,7 @@
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
   let firstClearSeen = 0;   // live on both pages: first frame that actually passed the quality gate (not just detected) - the deadline clock starts here, not at first detection, so an initial blurry/focus-hunting stretch doesn't eat into the budget
+  let usableMs = 0, lastUsable = 0;   // 17 Nov: the usable-frame clock - advances by the gap to the previous usable frame, capped at USABLE_GAP_MS, so rejected stretches do not count
   let rejected = [];   // admin only: frames seen but skipped (too small/blurry/dark/glare), so the quality gates can be checked against real misses too
   const top3 = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key, p]) => ({ key, p: Math.round(p * 1000) / 10 }));
   function frameShot() {   // what the camera saw (centre square), small, for the test log
@@ -316,7 +319,20 @@
     viewer.classList.add("locked");
     setTimeout(() => { stopCamera(); render(key, { scanned: true, vec, reinforcedAs }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
-  function resetHold(t) { held = []; holdStart = t; firstClearSeen = 0; settle = []; }
+  function resetHold(t) { held = []; holdStart = t; firstClearSeen = 0; usableMs = 0; lastUsable = 0; settle = []; }
+  // The window's average ranking - what the decision reads, and what the chips show when the clock runs out on a frame
+  // the gates rejected. Keys come from every frame, not just the first: a custom (admin-added) chocolate's print match can
+  // come and go frame to frame, so held[0] alone might not have every key that appears later - missing values default to 0.
+  function rankHeld() {
+    const keys = new Set(); held.forEach(f => Object.keys(f.p).forEach(k => keys.add(k)));
+    const avg = {}; keys.forEach(k => avg[k] = held.reduce((s, f) => s + (f.p[k] || 0), 0) / held.length);
+    return Object.entries(avg).sort((a, b) => b[1] - a[1]);
+  }
+  // 17 Nov: out of time = 5 s of usable frames spent, or 10 s on the wall clock since the first usable frame, with at
+  // least three frames held; checked on every frame, rejected ones included, so a scan can no longer run on past the
+  // deadline just because its frames keep failing the gates
+  const outOfTime = t0 => held.length >= 3 && !!firstClearSeen && (usableMs >= HARD_DEADLINE_MS || t0 - firstClearSeen >= WAIT_CEILING_MS);
+  function giveUp(r) { if (lastInfo) lastInfo.forced = false; unsure(rankHeld().slice(0, 3).map(([k]) => k), r.print?.vec); }
   // Settle gate (13 Nov). Nothing starts - no hold, no 5 s clock - until the view has stayed roughly still over whatever
   // the finder found: the last three frames, spanning at least SETTLE_SPAN_MS, within SETTLE_MOVE of each other, or
   // found continuously for SETTLE_MAX_MS with no jump. Why: the finder says "found" far too easily (an empty desk
@@ -356,6 +372,7 @@
             light: r.light ? Math.round(r.light.p90) : null, glare: r.light ? +r.light.glare.toFixed(3) : null, tilt: tiltAngle != null ? Math.round(tiltAngle) : null, obj: +r.obj.toFixed(3),
             looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null });   // look-again: extra finder passes, and the box size before them
         }
+        if (outOfTime(t0)) { giveUp(r); return; }
       } else if (r.found && settling(r, t0)) {
         // settle gate: the view is still moving over whatever the finder found - show the box, start nothing yet
         lastSeen = t0; showMark(r, 0);
@@ -375,6 +392,7 @@
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
           p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, tilt: tiltAngle != null ? Math.round(tiltAngle) : null });
         if (!firstClearSeen) firstClearSeen = t0;   // live on both pages - this frame already cleared the quality gate above, so the deadline clock starts counting from here
+        usableMs += lastUsable ? Math.min(t0 - lastUsable, USABLE_GAP_MS) : 0; lastUsable = t0;   // the usable-frame clock
         if (DEBUG) {
           if (!firstSeen) firstSeen = t0;
           if (trace.length < 400) trace.push({ t: Math.round(t0 - firstSeen), cx: +r.box.cx.toFixed(3), cy: +r.box.cy.toFixed(3), size: +r.box.size.toFixed(3),
@@ -382,7 +400,8 @@
             looks: r.looks ?? null, size1: r.size1 != null ? +r.size1.toFixed(3) : null, cx1: r.box1 ? +r.box1.cx.toFixed(3) : null, cy1: r.box1 ? +r.box1.cy.toFixed(3) : null,   // looks/size1/cx1/cy1: the look-again's extra finder passes and the first look's box before them
             top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]),
             qraw: r.qraw != null ? +r.qraw.toFixed(2) : null,   // 13 Nov: the which-way-up model's own confidence on the frames it actually ran on (null = rotation reused); qsure is the resolved value
-            vec: r.print?.vec ? r.print.vec.map(v => +v.toFixed(3)) : null });   // 13 Nov: this frame's chocoprint, so a replay can rescore the live rule against a changed gallery (e.g. reinforcement on vs off)
+            vec: r.print?.vec ? r.print.vec.map(v => +v.toFixed(3)) : null,   // 13 Nov: this frame's chocoprint, so a replay can rescore the live rule against a changed gallery (e.g. reinforcement on vs off)
+            u: Math.round(usableMs) });   // 17 Nov: the usable-frame clock at this frame, so the replay can use the phone's own clock
         }
         const holdMs = META.holdMs ?? HOLD_MS;   // model 6: 0.4 s (replay: 3 frames already gave 0 wrong)
         held = held.filter((f, i) => t0 - f.t <= holdMs * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)
@@ -390,18 +409,12 @@
         showMark(r, progress);
         const tiltedNow = tiltAngle != null && tiltAngle > TILT_HINT_DEG;
         $("#hint").textContent = progress < 1 ? (tiltedNow ? "Hold the phone flatter, straight above the number" : "Hold still over the chocolate") : "Reading the number…";
-        // average every frame in the window. Keys come from every frame, not just the first: a custom (admin-added)
-        // chocolate's print match can come and go frame to frame, so held[0] alone might not have every key that
-        // appears later in the window — missing values default to 0 rather than producing NaN.
-        const keys = new Set(); held.forEach(f => Object.keys(f.p).forEach(k => keys.add(k)));
-        const avg = {};
-        keys.forEach(k => avg[k] = held.reduce((s, f) => s + (f.p[k] || 0), 0) / held.length);
-        const sorted = Object.entries(avg).sort((a, b) => b[1] - a[1]);
+        const sorted = rankHeld();   // average every frame in the window (see rankHeld)
         const [topKey, topP] = sorted[0], secondP = sorted[1] ? sorted[1][1] : 0;
         const count = v => held.filter(f => f.shell === v).length;
         const shellVote = ["dark", "milk", "white", "milkwhite"].sort((a, b) => count(b) - count(a))[0];
         const mcount = v => held.filter(f => f.mark === v).length;
-        lastInfo = { avgTop3: top3(avg), nowTop3: r.ranked.slice(0, 3).map(x => ({ key: x.key, p: Math.round(x.p * 1000) / 10 })), shell: shellVote,
+        lastInfo = { avgTop3: top3(Object.fromEntries(sorted)), nowTop3: r.ranked.slice(0, 3).map(x => ({ key: x.key, p: Math.round(x.p * 1000) / 10 })), shell: shellVote,
           mark: ["one", "two", "z"].sort((a, b) => mcount(b) - mcount(a))[0], frames: held.length, holdMs: Math.round(t0 - holdStart) };
         // "I don't know": held for a while but still not sure, so say what would help instead of guessing
         const stuck = !!META.candidate && progress >= 1 + IDK_AFTER_MS / holdMs, mean = f => held.reduce((s, h) => s + f(h), 0) / held.length;
@@ -433,15 +446,14 @@
           : META.shellOf[topKey] === shellVote && (META.logic === "shell" || META.markOf[topKey] === markVote);
         if (DEBUG && META.printShare) $("#hint").textContent += ` | print ${Math.round(printShare * 100)}%`;
         const decided = agreed && printOk && logicOk && progress >= 1 && held.length >= 3 && topP >= (META.decide ?? DECIDE) && topP - secondP >= (META.margin ?? MARGIN);
-        // Past HARD_DEADLINE_MS since the first frame that actually cleared the quality gate (not first detection -
-        // an initial blurry/focus-hunting stretch doesn't eat into this budget): stop WITHOUT answering. From 3 to
-        // 13 Nov this answered with whatever was the top guess instead, skipping every check above; replaying the
-        // saved traces (training/trace_replay.py, "E + 5s forced guess") shows that made 4 more test-6 scans wrong
-        // (8 -> 12) and 11 -> 15 pooled over test-4/5/6/7. Now the camera stops and the likeliest three are offered
-        // as chips - the same "Is it one of these?" block the photo path uses - so there is never an automatic
-        // answer without rule E passing. Live on both pages (firstClearSeen is tracked unconditionally).
-        const pastDeadline = !!firstClearSeen && (t0 - firstClearSeen) >= HARD_DEADLINE_MS && held.length >= 3;
-        if (DEBUG && firstClearSeen) $("#hint").textContent += ` | ${Math.max(0, Math.round((HARD_DEADLINE_MS - (t0 - firstClearSeen)) / 100) / 10)}s to deadline`;
+        // Out of time (see outOfTime): stop WITHOUT answering. From 3 to 13 Nov this answered with whatever was the
+        // top guess instead, skipping every check above; replaying the saved traces (training/trace_replay.py,
+        // "E + 5s forced guess") shows that made 4 more test-6 scans wrong (8 -> 12) and 11 -> 15 pooled over
+        // test-4/5/6/7. Now the camera stops and the likeliest three are offered as chips - the same "Is it one of
+        // these?" block the photo path uses - so there is never an automatic answer without rule E passing. Live on
+        // both pages (firstClearSeen is tracked unconditionally).
+        const pastDeadline = outOfTime(t0);
+        if (DEBUG && firstClearSeen) $("#hint").textContent += ` | ${Math.max(0, Math.round((HARD_DEADLINE_MS - usableMs) / 100) / 10)}s of usable frames left, ${Math.max(0, Math.round((WAIT_CEILING_MS - (t0 - firstClearSeen)) / 100) / 10)}s to the ceiling`;
         if (decided) {
           // like Face ID folding a good unlock back into its template: at the highest confidence tier, add this
           // chocoprint to the gallery for the rest of this visit, so a second pass over the same box gets easier.
@@ -452,10 +464,7 @@
           if (autoReinforced) Recognizer.reinforce(topKey, r.print.vec);
           lastInfo.forced = false;
           answer(topKey, r.print?.vec, autoReinforced ? topKey : null); return;
-        } else if (pastDeadline) {
-          lastInfo.forced = false;
-          unsure(sorted.slice(0, 3).map(([k]) => k), r.print?.vec); return;
-        }
+        } else if (pastDeadline) { giveUp(r); return; }
       } else {
         showMark(null);
         if (t0 - lastSeen > 400) resetHold(t0);              // chocolate left the view: start again

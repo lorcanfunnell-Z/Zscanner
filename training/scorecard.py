@@ -88,7 +88,7 @@ def row(name, t):
             f"{100 * a / n:5.1f} {fmt_range(al, ah)}")
 
 def scorecard(sessions):
-    print(f"zScanner scorecard - the live rule (E, no answer past the 5 s deadline), replayed from the saved traces of {', '.join(sessions)}")
+    print(f"zScanner scorecard - the live rule (E, no answer after 5 s of usable frames or 10 s at most), replayed from the saved traces of {', '.join(sessions)}")
     print("Ranges: Wilson 95% intervals. 'wrong' is per 100 ANSWERED scans; 'answer rate' is per 100 scans attempted.\n")
     hdr = f"{'session':22s} {'scans':>5s} {'answered':>11s} {'right':>5s} {'wrong':>5s}   {'wrong/100 ans (95% range)':28s}   {'answer rate % (95% range)'}"
     print(hdr); print("-" * len(hdr))
@@ -124,7 +124,7 @@ def scorecard(sessions):
 
 # ---------------------------------------------------------------- compare ----------------------------------------------------------------
 # A result set is a list of {"id", "truth", "said", "outcome"} with outcome in {"right", "wrong", "none"} (none = not answered).
-RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.LIVE, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = LIVE since 13 Nov; E+forced5 was live 3-13 Nov
+RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.STOP_WALL5, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = the wall-clock 5 s stop, live 13-17 Nov; E+forced5 was live 3-13 Nov; LIVE = 5 s of usable frames + 10 s ceiling since 17 Nov
               "E+A": {**tr.E, "scanmajority": 1}, "E+A2": {**tr.E, "printmajority": 1}, "E+B1": {**tr.E, "anglesteady": 30},
               "E+B2": {**tr.E, "anglemain": 45}, "E+A+B2": {**tr.E, "scanmajority": 1, "anglemain": 45}, "E+deadline": {**tr.E, "deadline": 5000}}
 

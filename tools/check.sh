@@ -17,6 +17,9 @@
 #   frame in headless Chromium (about 6 minutes), diffed against training/baseline-photo.txt
 cd "$(dirname "$0")/.."
 FAIL=0; say() { printf "\n== %s\n" "$1"; }
+# flags can come in any order (17 Nov: "--browser --photo --update-baseline" used to leave steps 3-4 un-updated, because they only looked at $1 and $2)
+UPDATE=0; BROWSER=0; PHOTO=0
+for a in "$@"; do case "$a" in --update-baseline) UPDATE=1;; --browser) BROWSER=1;; --photo) PHOTO=1;; esac; done
 say "1. JavaScript parses"
 for f in app/*.js training/*.js training/lib/*.js tools/*.js; do node --check "$f" 2>/dev/null || { echo "  FAIL  $f"; FAIL=1; }; done
 [ $FAIL = 0 ] && echo "  ok    all files"
@@ -29,7 +32,7 @@ node tools/pack_gallery.js --check || FAIL=1   # 13 Nov: the phone downloads a 1
 say "3. Quality check vs baseline (about a minute)"
 tools/fair_check.sh check app/model6/reader/model.json app/model6 >/dev/null 2>&1
 NOW=$(sed -n '3,$p' experiments/fair-check-check.txt | sed -E 's/check-(rec|held)/X-\1/')
-if [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ]; then echo "$NOW" > training/baseline-model6.txt; echo "  baseline updated"; 
+if [ $UPDATE = 1 ]; then echo "$NOW" > training/baseline-model6.txt; echo "  baseline updated"; 
 elif [ ! -f training/baseline-model6.txt ]; then echo "$NOW" > training/baseline-model6.txt; echo "  baseline saved (first run)";
 elif diff <(echo "$NOW") training/baseline-model6.txt >/dev/null; then echo "  ok    identical to baseline"; 
 else echo "  CHANGED from baseline:"; diff <(echo "$NOW") training/baseline-model6.txt | sed 's/^/    /' | head -20; FAIL=1; fi
@@ -41,11 +44,11 @@ for S in $HELD; do
   NOWE="$NOWE$S: $LINE
 "
 done
-if [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ]; then printf '%s' "$NOWE" > training/baseline-ruleE.txt; echo "  baseline updated";
+if [ $UPDATE = 1 ]; then printf '%s' "$NOWE" > training/baseline-ruleE.txt; echo "  baseline updated";
 elif [ ! -f training/baseline-ruleE.txt ]; then printf '%s' "$NOWE" > training/baseline-ruleE.txt; echo "  baseline saved (first run)";
 elif diff <(printf '%s' "$NOWE") training/baseline-ruleE.txt >/dev/null; then echo "  ok    identical to baseline";
 else echo "  CHANGED from baseline:"; diff <(printf '%s' "$NOWE") training/baseline-ruleE.txt | sed 's/^/    /'; FAIL=1; fi
-if [ "$1" = "--browser" ] || [ "$2" = "--browser" ]; then
+if [ $BROWSER = 1 ]; then
   say "5. Browser smoke test (a few minutes)"
   # Start the little web server the pages are served from, and wait until it actually answers. A flat "sleep 1"
   # was enough on a warm machine and not on a cold one, so the first run of the day could fail for no real
@@ -56,9 +59,9 @@ if [ "$1" = "--browser" ] || [ "$2" = "--browser" ]; then
   node tools/browser_smoke.js 2>/dev/null || FAIL=1
   kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null
 fi
-if [ "$1" = "--photo" ] || [ "$2" = "--photo" ] || [ "$3" = "--photo" ]; then
+if [ $PHOTO = 1 ]; then
   say "6. Single-photo path vs baseline (about 6 minutes)"
-  UPD=""; { [ "$1" = "--update-baseline" ] || [ "$2" = "--update-baseline" ] || [ "$3" = "--update-baseline" ]; } && UPD="--update-baseline"
+  UPD=""; [ $UPDATE = 1 ] && UPD="--update-baseline"
   node tools/photo_check.js $UPD 2>/dev/null || FAIL=1
 fi
 echo; [ $FAIL = 0 ] && echo "ALL CHECKS PASSED" || { echo "SOME CHECKS FAILED"; exit 1; }

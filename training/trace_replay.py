@@ -14,11 +14,13 @@ L = None   # the loaded session's scans (set by main() or by a caller after load
 META = json.load(open(os.path.join(ROOT, "app/model6/meta.json")))
 zm = lambda k: "z" if k and k.startswith("z") else k
 E = {"or99": 1, "printshare": .8, "logic": "shell"}   # rule E: the decision rule's checks (app/model6/meta.json)
-LIVE = {**E, "stop": 5000}   # what the phone really runs: rule E, and past app/app.js's 5 s deadline no answer at all
+LIVE = {**E, "stop_usable": 5000, "stop_wall": 10000}   # what the phone really runs (17 Nov): rule E; after 5 s of USABLE frames (a rejected stretch pauses the clock; app.js USABLE_GAP_MS 400), or 10 s on the wall clock, no answer at all
+STOP_WALL5 = {**E, "stop": 5000}   # the 13-17 Nov rule: a wall-clock 5 s, checked only on usable frames
 # The FIRST row of "new" mode is what tools/check.sh step 4 diffs against training/baseline-ruleE.txt, so it must be
 # the rule the phone really runs. Until 13 Nov it was plain E, while the phone had been running E plus a 5 s forced
 # guess (live since 3 Nov) - so the baseline was under-counting wrong answers.
-NEW_RULES = [("E + 5s stop: not certain by then = no answer, choices offered (LIVE since 13 Nov)", LIVE),
+NEW_RULES = [("E + 5 s of usable frames, 10 s ceiling: not certain by then = no answer, choices offered (LIVE since 17 Nov)", LIVE),
+             ("E + 5s wall-clock stop (live 13-17 Nov)", STOP_WALL5),
              ("E + 5s forced guess (live 3-13 Nov)", {**E, "deadline": 5000}),
              ("E alone, no deadline (step 4 measured this until 13 Nov)", E),
              ("E + A: whole-scan majority", {**E, "scanmajority": 1}),
@@ -46,7 +48,9 @@ def run(rule, K=3, detail=False, L=None):
     out, full = [], []
     for r in rows:
         held, said, at, seen = [], None, None, None
+        tu, prev_t = 0, None   # the usable-frame clock: the phone's own value when logged (u, since scanner-v60), else rebuilt from the gaps between held frames
         for f in r["trace"]:
+            tu = f["u"] if f.get("u") is not None else (tu + min(f["t"] - prev_t, 400) if prev_t is not None else 0); prev_t = f["t"]
             held.append(f); win = [h for i, h in enumerate(held) if f["t"] - h["t"] <= 600 or i >= len(held) - 3]   # as the phone: last 0.6 s, always at least 3 frames
             if f["t"] - held[0]["t"] < 400: continue
             if len(win) < 3: continue
@@ -90,6 +94,11 @@ def run(rule, K=3, detail=False, L=None):
             # from the first held frame of the trace; the phone's restarts if the chocolate jumps (resetHold), a small
             # difference the replay has never modelled.
             if rule.get("stop") and f["t"] >= rule["stop"] and len(win) >= 3: break
+            # 17 Nov: the live stop - 5 s of usable frames, or 10 s on the wall clock. The phone checks both on every frame,
+            # rejected ones included; the trace holds only usable frames, so this replay stops at the next one - the same
+            # outcome (no answer can come from a rejected frame), only the chips may differ by a frame
+            if rule.get("stop_usable") and tu >= rule["stop_usable"] and len(win) >= 3: break
+            if rule.get("stop_wall") and f["t"] >= rule["stop_wall"] and len(win) >= 3: break
         out.append((r["truth"], said, at if said else None))
         full.append({"truth": r["truth"], "said": said, "at": at if said else None, "scan": r, "held": list(held), "seen": seen})
     if detail == "full": return full
