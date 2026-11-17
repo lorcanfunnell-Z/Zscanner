@@ -1,0 +1,102 @@
+<!doctype html>
+<!-- zScanner: mark the truth on saved frames by hand, on the Mac (17 Nov 2026).
+     Open this file in Safari or Chrome (no server needed), choose a session's camera/ folder, then on each frame either
+     drag a BOX round the chocolate's number face (the top face only: not the side wall, not the shadow), or tap its four
+     CORNERS in order - top-left of the number as read upright, then clockwise - or mark NOTHING when no chocolate is in
+     the frame. Export writes finder-truth.json (boxes, the format tests/test-N/finder-truth.json uses) and corners.json
+     (four corners, for the corner-alignment oracle). Marks are kept in the browser between visits until you clear them.
+     Values are fractions of the image (0-1), so the pixel size of the frame does not matter. -->
+<meta charset="utf-8"><title>zScanner · mark boxes</title>
+<style>
+  body{font:15px -apple-system,Helvetica,sans-serif;margin:16px;color:#222;max-width:1400px}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  button{font:inherit;padding:6px 12px} button.on{background:#222;color:#fff}
+  #wrap{position:relative;display:inline-block;cursor:crosshair;user-select:none;-webkit-user-select:none}
+  canvas{display:block;background:#eee} #name{font-family:Menlo,monospace} .muted{color:#777}
+  kbd{border:1px solid #bbb;border-radius:3px;padding:0 4px;font:13px Menlo,monospace}
+</style>
+<h2>Mark the number face on saved frames</h2>
+<div class="row">
+  <label>Camera folder: <input type="file" id="dir" webkitdirectory directory multiple></label>
+  <span class="muted" id="count">no frames loaded</span>
+</div>
+<div class="row">
+  <button id="mBox" class="on">Box (drag)</button><button id="mCorners">Corners (4 taps)</button>
+  <button id="nothing">Nothing in frame</button><button id="undo">Undo</button><button id="clear">Clear this frame</button>
+  <label>Width <input type="range" id="zoom" min="480" max="1280" step="80" value="800"></label>
+  <span class="muted"><kbd>←</kbd> <kbd>→</kbd> frames · <kbd>N</kbd> nothing · <kbd>U</kbd> undo</span>
+</div>
+<div class="row"><button id="prev">← Previous</button><button id="next">Next →</button><span id="name"></span><span id="state" class="muted"></span></div>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div class="row"><button id="export">Export finder-truth.json + corners.json</button><button id="wipe">Forget every mark for this folder</button><span class="muted" id="summary"></span></div>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  let files = [], i = 0, mode = "box", marks = {}, key = "", drag = null, img = null, folder = "";
+  const load = () => { try { marks = JSON.parse(localStorage.getItem("zmark:" + folder) || "{}"); } catch { marks = {}; } };
+  const save = () => localStorage.setItem("zmark:" + folder, JSON.stringify(marks));
+  $("#dir").onchange = e => {
+    const all = [...e.target.files].filter(f => /\.(jpe?g|png)$/i.test(f.name));
+    all.sort((a, b) => a.webkitRelativePath.localeCompare(b.webkitRelativePath, undefined, { numeric: true }));
+    folder = all.length ? all[0].webkitRelativePath.split("/")[0] : "";
+    files = all.map(f => ({ file: f, rel: f.webkitRelativePath.split("/").slice(1).join("/") }));   // "22/scan27.jpg", as finder-truth.json keys them
+    load(); i = 0; show();
+  };
+  function show() {
+    if (!files.length) { $("#count").textContent = "no frames loaded"; return; }
+    $("#count").textContent = `${files.length} frames`; key = files[i].rel; $("#name").textContent = `${i + 1} / ${files.length}  ${key}`;
+    const url = URL.createObjectURL(files[i].file); img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); draw(); }; img.src = url;
+  }
+  function draw() {
+    const c = $("#c"), W = +$("#zoom").value, H = Math.round(W * img.height / img.width); c.width = W; c.height = H;
+    const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0, W, H);
+    const m = marks[key]; ctx.lineWidth = 2;
+    if (m === null) { ctx.fillStyle = "rgba(200,0,0,.15)"; ctx.fillRect(0, 0, W, H); }
+    if (m && m.box) { ctx.strokeStyle = "#ffd400"; const [x0, y0, x1, y1] = m.box; ctx.strokeRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H); }
+    if (m && m.corners) {
+      ctx.strokeStyle = "#00c8ff"; ctx.fillStyle = "#00c8ff"; ctx.beginPath();
+      m.corners.forEach(([x, y], k) => { k ? ctx.lineTo(x * W, y * H) : ctx.moveTo(x * W, y * H); });
+      if (m.corners.length === 4) ctx.closePath(); ctx.stroke();
+      m.corners.forEach(([x, y], k) => { ctx.beginPath(); ctx.arc(x * W, y * H, 5, 0, 7); ctx.fill(); ctx.fillText(String(k + 1), x * W + 7, y * H - 7); });
+    }
+    if (drag) { ctx.strokeStyle = "#ffd400"; ctx.setLineDash([4, 3]); ctx.strokeRect(drag[0] * W, drag[1] * H, (drag[2] - drag[0]) * W, (drag[3] - drag[1]) * H); ctx.setLineDash([]); }
+    const done = Object.keys(marks).filter(k => files.some(f => f.rel === k)).length;
+    $("#state").textContent = m === null ? "marked: nothing in frame" : m ? `marked: ${m.box ? "box" : ""}${m.box && m.corners ? " + " : ""}${m.corners ? m.corners.length + " corner" + (m.corners.length > 1 ? "s" : "") : ""}` : "not marked yet";
+    $("#summary").textContent = `${done} of ${files.length} frames marked`;
+  }
+  const pos = e => { const r = $("#c").getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+  const wrap = $("#wrap");
+  wrap.onpointerdown = e => { if (!img) return; const [x, y] = pos(e); if (mode === "box") { drag = [x, y, x, y]; wrap.setPointerCapture(e.pointerId); } };
+  wrap.onpointermove = e => { if (drag) { const [x, y] = pos(e); drag[2] = x; drag[3] = y; draw(); } };
+  wrap.onpointerup = e => {
+    if (!img) return; const [x, y] = pos(e);
+    if (mode === "box" && drag) {
+      const b = [Math.min(drag[0], x), Math.min(drag[1], y), Math.max(drag[0], x), Math.max(drag[1], y)]; drag = null;
+      if (b[2] - b[0] > .01 && b[3] - b[1] > .01) marks[key] = { ...(marks[key] || {}), box: b.map(v => +v.toFixed(3)) };
+    } else if (mode === "corners") {
+      const m = (marks[key] && marks[key].corners && marks[key].corners.length < 4) ? marks[key] : { ...(marks[key] || {}), corners: [] };
+      m.corners = [...(m.corners || []), [+x.toFixed(3), +y.toFixed(3)]]; marks[key] = m;
+    }
+    save(); draw();
+  };
+  const setMode = m => { mode = m; $("#mBox").classList.toggle("on", m === "box"); $("#mCorners").classList.toggle("on", m === "corners"); };
+  $("#mBox").onclick = () => setMode("box"); $("#mCorners").onclick = () => setMode("corners");
+  const nothing = () => { if (img) { marks[key] = null; save(); draw(); } };
+  const undo = () => { const m = marks[key]; if (m && m.corners && m.corners.length) { m.corners.pop(); if (!m.corners.length) delete m.corners; } else if (m && m.box) delete m.box; else if (m === null) delete marks[key]; if (m && !m.box && !m.corners) delete marks[key]; save(); draw(); };
+  $("#nothing").onclick = nothing; $("#undo").onclick = undo; $("#clear").onclick = () => { delete marks[key]; save(); draw(); };
+  const step = d => { if (files.length) { i = (i + d + files.length) % files.length; show(); } };
+  $("#prev").onclick = () => step(-1); $("#next").onclick = () => step(1); $("#zoom").oninput = () => img && draw();
+  document.onkeydown = e => { if (e.target.tagName === "INPUT") return; if (e.key === "ArrowLeft") step(-1); else if (e.key === "ArrowRight") step(1); else if (e.key === "n" || e.key === "N") nothing(); else if (e.key === "u" || e.key === "U") undo(); };
+  const download = (name, obj) => { const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" })), download: name }); document.body.append(a); a.click(); a.remove(); };
+  $("#export").onclick = () => {
+    const boxes = { _comment: `Hand-marked number-face boxes (tools/mark_boxes.html, ${new Date().toISOString().slice(0, 10)}): [x0,y0,x1,y1] as fractions of the frame, the top face only; null = no chocolate in the frame.` };
+    const corners = { _comment: `Hand-marked corners of the number face (tools/mark_boxes.html, ${new Date().toISOString().slice(0, 10)}): four [x,y] as fractions of the frame, top-left of the number as read upright then clockwise; null = no chocolate.` };
+    let nb = 0, nc = 0;
+    for (const f of files) { const m = marks[f.rel]; if (m === null) { boxes[f.rel] = null; corners[f.rel] = null; nb++; nc++; } else if (m) { if (m.box) { boxes[f.rel] = m.box; nb++; } if (m.corners && m.corners.length === 4) { corners[f.rel] = m.corners; nc++; } } }
+    if (nb) download("finder-truth.json", boxes); if (nc) download("corners.json", corners);
+    $("#summary").textContent = `exported ${nb} boxes and ${nc} corner sets`;
+  };
+  $("#wipe").onclick = () => { if (confirm("Forget every mark for this folder?")) { marks = {}; save(); draw(); } };
+})();
+</script>
