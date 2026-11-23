@@ -27,7 +27,8 @@ NEW_RULES = [("E + 5 s of usable frames, 10 s ceiling: not certain by then = no 
              ("E + A2: whole-scan chocoprint majority", {**E, "printmajority": 1}),
              ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
              ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
-             ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45})]
+             ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45}),
+             ("LIVE + finder confidence >= 0.75 over the window (23 Nov lead: test-14's Nothing shots sat at 0.56-0.74, every chocolate scan at 1.0)", {**LIVE, "minobj": .75})]
 
 def load(session_dir):   # the scans a replay can use: labelled with a chocolate, with a trace
     # "none" (a deliberate Nothing shot, 13 Nov) is scored separately - see load_nothing - so it never counts as a
@@ -83,6 +84,9 @@ def run(rule, K=3, detail=False, L=None):
                 if rs:
                     main = jsvote([str(int(((a + 22.5) % 360) // 45)) for a in rs])
                     ok = ok and all(adiff(h["rot"], int(main) * 45) <= rule["anglemain"] for h in win if h.get("rot") is not None)
+            if rule.get("minobj"):                              # 23 Nov lead (test-14's Nothing shots): the finder's own confidence over the window must reach this; a trace without obj (before scanner-v5x) is left alone
+                obs = sorted(h["obj"] for h in win if h.get("obj") is not None)
+                ok = ok and (not obs or obs[len(obs) // 2] >= rule["minobj"])
             if rule.get("logic", "full") != "none":            # the phone's logic check: shell (and mark) votes must fit
                 # N°20's milk+white shell is read unreliably (28 Oct fix) - the phone skips the shell-match
                 # requirement just for it, so this replay has to do the same to actually match app.js

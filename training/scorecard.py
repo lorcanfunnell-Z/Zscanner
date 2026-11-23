@@ -124,13 +124,22 @@ def scorecard(sessions):
     print("  So the honest statement today is a range, not a number; the exam session (training/exam-session-brief.md) is what narrows it.")
 
 # ---------------------------------------------------------------- compare ----------------------------------------------------------------
-def nothing_table(sessions):
+def nothing_table(sessions, rules=None):
     """The Nothing shots (truth "none", 13 Nov): a deliberate not-a-chocolate picture, where the right outcome is no answer and any
     answer is wrong. Scored on the phone's own recorded type, separately from the chocolate scans above, so they move neither
     the answer rate nor the wrong-per-100 figure."""
     rows = [(s, tr.load_nothing(os.path.join(ROOT, "tests", s))) for s in sessions]
     rows = [(s, r) for s, r in rows if r]
     if not rows: return
+    if rules:   # 23 Nov: the same shots replayed from their traces under each rule - how many would each rule have answered
+        print("\nNothing shots replayed from their traces (answered = wrong; a shot with no trace cannot be answered by any rule):")
+        for name, rule in rules:
+            parts = []
+            for s, r in rows:
+                rr = [e for e in r if e.get("trace")]; out = tr.run(rule, detail=True, L=rr) if rr else []
+                parts.append(f"{s} {sum(1 for o in out if o[1])}/{len(r)}")
+            print(f"  {name:14s} answered " + "   ".join(parts))
+        return
     print("\nNothing shots (not a chocolate: no answer is right, any answer is wrong) - scored separately:")
     print(f"{'session':22s}{'shots':>6s}{'answered (wrong)':>18s}{'held out':>10s}{'never framed':>14s}{'closed early':>14s}{'wrong per 100 shots (95% range)':>34s}")
     tot = [0, 0, 0, 0, 0]
@@ -147,7 +156,8 @@ def nothing_table(sessions):
 # A result set is a list of {"id", "truth", "said", "outcome"} with outcome in {"right", "wrong", "none"} (none = not answered).
 RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.STOP_WALL5, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = the wall-clock 5 s stop, live 13-17 Nov; E+forced5 was live 3-13 Nov; LIVE = 5 s of usable frames + 10 s ceiling since 17 Nov
               "E+A": {**tr.E, "scanmajority": 1}, "E+A2": {**tr.E, "printmajority": 1}, "E+B1": {**tr.E, "anglesteady": 30},
-              "E+B2": {**tr.E, "anglemain": 45}, "E+A+B2": {**tr.E, "scanmajority": 1, "anglemain": 45}, "E+deadline": {**tr.E, "deadline": 5000}}
+              "E+B2": {**tr.E, "anglemain": 45}, "E+A+B2": {**tr.E, "scanmajority": 1, "anglemain": 45}, "E+deadline": {**tr.E, "deadline": 5000},
+              "LIVE+obj75": {**tr.LIVE, "minobj": .75}, "LIVE+obj80": {**tr.LIVE, "minobj": .8}}   # 23 Nov lead: the finder-confidence gate against Nothing shots (trace_replay "minobj")
 
 def outcome(truth, said):
     return "none" if not said else ("right" if said == truth else "wrong")
@@ -183,6 +193,12 @@ def outcomes_from_dump(path, rule_name):
         said = _top(m if which == "m4" else b, ids)[0] if rule(m, p, b, ids) else None
         out.append({"id": f"row{i}:{r['truth']}", "truth": r["truth"], "said": said, "outcome": outcome(r["truth"], said)})
     return out
+
+def rule_of(arg):   # the rule a compare argument names (a rule name or a JSON rule), or None for a dump file
+    if os.path.isfile(arg): return None
+    if arg in RULE_NAMES: return RULE_NAMES[arg]
+    try: return json.loads(arg)
+    except Exception: return None
 
 def parse_result_set(arg, sessions, dump_rule):
     if os.path.isfile(arg):
@@ -228,6 +244,8 @@ def compare(before_arg, after_arg, sessions, dump_rule):
         print("\nscans that changed:")
         for id_, xo, yo, t, xs, ys in changed: print(f"  {id_:16s} {xo:5s} -> {yo:5s}   truth {t}, said {xs or '-'} -> {ys or '-'}")
     print(f"\nverdict: {r['verdict']}")
+    rb, ra = rule_of(before_arg), rule_of(after_arg)
+    if rb is not None and ra is not None: nothing_table(sessions, rules=[("before", rb), ("after", ra)])
     if r["verdict"].startswith("can't"):
         print("  (a real difference needs at least 6 changed scans all going one way, or 8 vs 1, 10 vs 2, 12 vs 3 - "
               "the total number of scans does not help, only the ones that changed count)")
