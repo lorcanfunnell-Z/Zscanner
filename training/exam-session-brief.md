@@ -56,6 +56,10 @@ has been scored.
   mixed in here.
 - **Let the app decide.** Wait for the answer or for "I don't know". Don't retake a scan because the answer looked
   wrong: a wrong answer is exactly the thing being measured.
+- **Never rescan the same chocolate (learned in sitting 1, 23 Nov).** Eleven scans were redone with "I scanned
+  something else" after a wrong or a not-certain answer, with the chocolate the list had asked for labelled by hand.
+  Every scan was saved, so the first attempts were recovered and scored as the exam, but the button is only for a
+  different chocolate under the camera. Right, wrong or not certain: tap Next. The card says so since scanner-v64.
 - **Label carefully.** Tap the true chocolate before moving on, and check it. Two past results were muddled by a
   mis-tap or a chocolate swapped mid-scan (test-7's N°22, the N°24 trace). If something went wrong with the handling,
   use the note field and say so; the scan stays in the log.
@@ -67,6 +71,10 @@ has been scored.
 - **Keep the sitting continuous.** If the page resets or the phone crashes, write it down and carry on; it is useful
   data in itself.
 - **Download the zip at the end of each sitting** and send it. One zip per sitting.
+
+**Sitting 1 (23 Nov, test-14): as planned 84 of 112 answered, 79 right, 5 wrong - 6.0 wrong per 100 answers
+(2.6-13.2); every wrong answer a lookalike pair, N°19 read as 13 three times. Sittings 2 and 3 run on the same
+scanner (v64 only changed the card's wording); the full account is in docs/HISTORY.md.**
 
 **The plan (Lorcan, 23 Nov): three exam lists, one per sitting.** Tick Exam mode and the page shows three buttons,
 Exam list 1, 2 and 3, each 120 scans: every chocolate 4 times in a shuffled order, then 8 Nothing shots, with the page
@@ -107,18 +115,27 @@ should stay on for clients is a separate decision, still Lorcan's.
 
 ## What happens to the zips
 
-Each sitting is filed as its own session (`tests/exam-A/`, `exam-B/`, …) and added to the held-back list in
+Each exam list is filed as its own session (`tests/test-14` for list 1, `test-15`, `test-16`; every zip holds the
+whole log, so the sittings are filed by `exam_list` from the last zip) and added to the held-back list in
 `training/sessions.json`. Nothing from the exam goes into the gallery or any retrain until the whole exam has been
 scored. Then:
 
 ```bash
-python3 training/scorecard.py --sessions exam-A,exam-B,exam-C,exam-D
+python3 training/exam_report.py tests/test-14 tests/test-15 tests/test-16
+```
+
+scores each sitting and the pool two ways - **as planned** (each list position once, by its first attempt, which is
+the exam) and **every scan** (retakes included) - with the Nothing shots on their own line, the confusions, each
+chocolate's results and the time to a right answer; and
+
+```bash
+python3 training/scorecard.py --sessions test-14,test-15,test-16
 ```
 
 gives the answered, right and wrong counts with their ranges — the number this whole exercise is for — and
 
 ```bash
-python3 training/scorecard.py risk --sessions exam-A,exam-B,exam-C,exam-D
+python3 training/scorecard.py risk --sessions test-14,test-15,test-16
 ```
 
 checks, on scans that were never looked at while choosing anything, whether the leads from the current pool hold: that
