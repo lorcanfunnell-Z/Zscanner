@@ -43,7 +43,7 @@ has been scored.
 ## How to run a sitting (75 to 100 scans, 30 to 45 minutes)
 
 - **Switch on Exam mode** in the admin page's Test log panel (added 13 Nov). It deals the whole exam for you: a
-  shuffled list of all 28 chocolates twelve times each, shown one at a time as "Scan next: N°13 (5 of 336)". The
+  shuffled lists, shown one at a time as "Exam list 1 · 5 of 120 · Scan next: N°13". The
   truth is filled in from that list before you scan, right or wrong is worked out from the scanner's answer, and the
   scan is saved on its own; the only tap you ever need is "I scanned something else" when you picked up the wrong
   chocolate. This replaces tapping the truth after the answer, which is how the N°21/N°22 mis-tap happened. The list
@@ -68,10 +68,11 @@ has been scored.
   data in itself.
 - **Download the zip at the end of each sitting** and send it. One zip per sitting.
 
-**The plan (Lorcan, 23 Nov): three sittings, each 112 chocolate scans (every chocolate 4 times, dealt by Exam mode) plus
-8 Nothing shots with Exam mode switched off at the end of the sitting: 336 chocolate scans and 24 Nothing shots in all.**
-Before the first sitting, tick Exam mode and tap "Start the exam list again from scan 1" twice, so the list dealt is
-the 336-long one (the page shows "1 of 336"). Four sittings of about 77 also work; the list keeps its place either way.
+**The plan (Lorcan, 23 Nov): three exam lists, one per sitting.** Tick Exam mode and the page shows three buttons,
+Exam list 1, 2 and 3, each 120 scans: every chocolate 4 times in a shuffled order, then 8 Nothing shots, with the page
+saying what to point at ("Scan next: nothing (point at the box lid)"). 336 chocolate scans and 24 Nothing shots in all.
+Each list keeps its own position, so a sitting can stop and carry on; when a list is finished the page says so -
+download the zip, then tap the next list's button. "Start the exam again from list 1" deals three fresh lists.
 
 **Chocolate age (decided 16 Nov):** the exam runs on fresh chocolates, all sittings within a day or two of each other.
 Aged chocolates are covered separately, after the exam: one ordinary 28-scan session on the old set (3-4 weeks old)

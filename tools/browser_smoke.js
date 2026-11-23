@@ -28,6 +28,22 @@ const { edgeAngle } = require("../training/align_lib.js");
   await a.waitForFunction(() => /scanner-v\d+/.test(document.querySelector("#tlBuild")?.textContent || ""), null, { timeout: 20000 }).catch(() => {});
   ok(/scanner-v\d+ · models-[\d.]+ · model6/.test(await a.textContent("#tlBuild")), `admin page shows the build: ${(await a.textContent("#tlBuild")).trim()}`);
   ok(/N°18/.test(ar["18"]) && /N°21/.test(ar["21"]), `admin photo upload: ${ar["18"]} / ${ar["21"]}`);
+  // 23 Nov: Exam mode deals three lists of 120 (every chocolate 4 times, then 8 Nothing shots with a subject to point at),
+  // kept on the phone with each list's position; a finished list says so and the next starts on its button.
+  const exam1 = await a.evaluate(() => { localStorage.removeItem("zscanner-exam-v2"); const cb = document.querySelector("#tlExam"); cb.checked = true; cb.dispatchEvent(new Event("change"));
+    const x = JSON.parse(localStorage.getItem("zscanner-exam-v2"));
+    return { next: document.querySelector("#tlNext").textContent, buttons: [...document.querySelectorAll("#tlLists button")].map(b => b.textContent.trim()),
+      lists: x.lists.length, len: x.lists.map(L => L.queue.length), nothing: x.lists.map(L => L.queue.filter(k => k === "none").length), tail: x.lists.map(L => L.queue.slice(-8).every(k => k === "none")),
+      each: x.lists.map(L => { const c = {}; L.queue.forEach(k => c[k] = (c[k] || 0) + 1); return Object.values(c).filter(v => v === 4).length; }) }; });
+  ok(/^Exam list 1 · 1 of 120 · Scan next: /.test(exam1.next) && exam1.lists === 3 && exam1.len.every(n => n === 120) && exam1.nothing.every(n => n === 8) && exam1.tail.every(Boolean) && exam1.each.every(n => n === 28) && exam1.buttons.length === 3,
+     `exam mode deals three lists of 112 + 8 Nothing: "${exam1.next}"; buttons ${exam1.buttons.join(" / ")}`);
+  const exam2 = await a.evaluate(() => { const cb = document.querySelector("#tlExam"), set = (l, pos) => { const x = JSON.parse(localStorage.getItem("zscanner-exam-v2")); x.lists[l].pos = pos; localStorage.setItem("zscanner-exam-v2", JSON.stringify(x)); cb.dispatchEvent(new Event("change")); return document.querySelector("#tlNext").textContent; };
+    const a1 = set(0, 112), a2 = set(0, 120); document.querySelectorAll("#tlLists button")[1].click(); const a3 = document.querySelector("#tlNext").textContent;
+    set(1, 120); set(2, 120); document.querySelectorAll("#tlLists button")[2].click(); const a4 = document.querySelector("#tlNext").textContent;
+    cb.checked = false; cb.dispatchEvent(new Event("change")); localStorage.removeItem("zscanner-exam-v2"); return { a1, a2, a3, a4, off: document.querySelector("#tlNext").textContent, hidden: document.querySelector("#tlLists").hidden }; });
+  ok(/113 of 120 · Scan next: nothing \(point at /.test(exam2.a1), `a list ends with eight Nothing shots and says what to point at: "${exam2.a1}"`);
+  ok(/^Exam list 1 finished: 120 scans\. Download the zip, then tap Exam list 2\./.test(exam2.a2) && /^Exam list 2 · 1 of 120/.test(exam2.a3) && /^All three exam lists finished/.test(exam2.a4) && exam2.off === "" && exam2.hidden,
+     `a finished list says so, the next starts on its button, the end is announced: "${exam2.a2}" -> "${exam2.a3}" -> "${exam2.a4}"`);
   // recognizer.js's inlined straightening maths vs training/align_lib.js's copy: deliberately duplicated (one reads
   // a canvas, the other a raw buffer) with nothing else checking they stay in sync as the maths evolves
   const angleInBrowser = await a.evaluate(async () => {

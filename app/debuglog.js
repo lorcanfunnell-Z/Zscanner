@@ -49,11 +49,12 @@
     <div class="stats" id="tlStats"></div>
     <p id="tlTally" style="margin:0;font-size:13px;color:var(--text)"></p>
     <div><label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font:400 14px var(--sans);color:var(--text)"><input type="checkbox" id="tlExam" style="width:auto"> Exam mode: scan from a shuffled list, the truth filled in for you</label>
+      <div class="tl-row" id="tlLists" hidden style="margin-top:8px"></div>
       <p id="tlNext" style="margin:6px 0 0;font:500 16px var(--serif);color:var(--ink)"></p></div>
     <div id="tlCurrent"></div>
     <button class="btn btn-dark" id="tlZip" type="button">Download test log (.zip)</button>
     <button class="tl-link" id="tlClear" type="button">Clear the test log</button>
-    <button class="tl-link" id="tlExamReset" type="button" hidden>Start the exam list again from scan 1</button>`;
+    <button class="tl-link" id="tlExamReset" type="button" hidden>Start the exam again from list 1</button>`;
   panel.querySelector("#tlNote").oninput = e => setNote(e.target.value);
   // which build this phone is running, read from sw.js by app.js (13 Nov): check it before every session
   const showBuild = b => { panel.querySelector("#tlBuild").textContent = `Build: ${b.version || "?"} · ${b.models || "?"} · ${(window.Recognizer && Recognizer.model) || "?"}`; };
@@ -61,34 +62,59 @@
   window.addEventListener("zbuild", e => showBuild(e.detail));
 
   // ---------- exam mode (13 Nov, see training/exam-session-brief.md) ----------
-  // The truth is entered BEFORE each scan, from a shuffled list the page deals: all 28 chocolates, EXAM_EACH times
-  // each (12 since 23 Nov: Lorcan's plan is three sittings of 4 scans per chocolate plus 8 Nothing shots, 336 + 24). Right or wrong is worked out from the scanner's answer and the scan is saved by itself; the only tap
+  // The truth is entered BEFORE each scan, from shuffled lists the page deals. 23 Nov (Lorcan's plan): THREE lists,
+  // one per sitting, each every chocolate EXAM_EACH times in a shuffled order and then EXAM_NOTHING "Nothing" shots
+  // (the page says what to point at), 3 x (112 + 8). The lists are dealt together and kept on the phone with each
+  // one's position, so a sitting can stop and carry on, and tapping a list's button switches to it. Right or wrong is worked out from the scanner's answer and the scan is saved by itself; the only tap
   // ever needed is "I scanned something else". This replaces tapping the truth after seeing the answer, which is how
   // the test-7 N°21/N°22 mis-tap happened, and it makes a predictable scanning order impossible. The list lives on
   // the phone, so a sitting can stop and the next one carries on where it left off.
-  const EXAM = "zscanner-exam-v1", EXAM_EACH = 12;
-  const getExam = () => { try { return JSON.parse(localStorage.getItem(EXAM)) || null; } catch { return null; } };
+  const EXAM = "zscanner-exam-v2", EXAM_LISTS = 3, EXAM_EACH = 4, EXAM_NOTHING = 8;
+  const NOTHING_IDEAS = ["the box lid", "a wrapper or the ribbon", "the white card with nothing on it", "the back of your hand", "the bare table", "the QR card", "a pen or your keys", "the closed box from the side"];
+  const getExam = () => { try { const x = JSON.parse(localStorage.getItem(EXAM)); return x && Array.isArray(x.lists) ? x : null; } catch { return null; } };
   const setExam = x => { try { localStorage.setItem(EXAM, JSON.stringify(x)); } catch {} };
   const examOn = () => panel.querySelector("#tlExam").checked;
   function dealExam() {
-    const q = []; for (let i = 0; i < EXAM_EACH; i++) q.push(...KEYS);
-    for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [q[i], q[j]] = [q[j], q[i]]; }   // Fisher-Yates
-    const x = { queue: q, pos: 0, dealt: new Date().toISOString() }; setExam(x); return x;
+    const lists = [];
+    for (let l = 0; l < EXAM_LISTS; l++) {
+      const q = []; for (let i = 0; i < EXAM_EACH; i++) q.push(...KEYS);
+      for (let i = q.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [q[i], q[j]] = [q[j], q[i]]; }   // Fisher-Yates
+      for (let i = 0; i < EXAM_NOTHING; i++) q.push("none");   // the Nothing shots close each list
+      lists.push({ queue: q, pos: 0 });
+    }
+    const x = { lists, current: 0, dealt: new Date().toISOString() }; setExam(x); try { localStorage.removeItem("zscanner-exam-v1"); } catch {}
+    return x;
   }
-  function examNext() {   // the chocolate to scan next, or null when the list is done / exam mode is off
+  // what to scan next in the current list: {key, pos, total, list (1-based), idea (for a Nothing shot)}, or null when
+  // that list is finished / exam mode is off
+  function examNext() {
     if (!examOn()) return null;
-    const x = getExam() || dealExam(); return x.pos < x.queue.length ? { key: x.queue[x.pos], pos: x.pos, total: x.queue.length } : null;
+    const x = getExam() || dealExam(), L = x.lists[x.current];
+    if (L.pos >= L.queue.length) return null;
+    const key = L.queue[L.pos], firstNothing = L.queue.length - EXAM_NOTHING;
+    return { key, pos: L.pos, total: L.queue.length, list: x.current + 1, idea: key === "none" ? NOTHING_IDEAS[(L.pos - firstNothing + EXAM_NOTHING) % NOTHING_IDEAS.length] : null };
   }
+  const nextLabel = nx => `${name(nx.key)}${nx.idea ? ` (point at ${nx.idea})` : ""}`;
   function showNext() {
-    const nx = examNext(), p = panel.querySelector("#tlNext"), r = panel.querySelector("#tlExamReset");
-    r.hidden = !examOn();
-    p.textContent = !examOn() ? "" : nx ? `Scan next: ${name(nx.key)}   (${nx.pos + 1} of ${nx.total})` : `Exam list finished - every chocolate scanned ${EXAM_EACH} times. Nothing shots next, or start the list again below.`;
+    const nx = examNext(), p = panel.querySelector("#tlNext"), r = panel.querySelector("#tlExamReset"), lb = panel.querySelector("#tlLists");
+    r.hidden = lb.hidden = !examOn();
+    if (!examOn()) { p.textContent = ""; return; }
+    const x = getExam() || dealExam();
+    lb.innerHTML = x.lists.map((L, i) => `<button type="button" class="btn ${i === x.current ? "btn-dark" : "btn-outline-dark"}" data-list="${i}">Exam list ${i + 1}<br><small>${L.pos >= L.queue.length ? "done" : `${L.pos} of ${L.queue.length}`}</small></button>`).join("");
+    lb.querySelectorAll("button").forEach(b => b.onclick = () => { const y = getExam(); if (y) { y.current = +b.dataset.list; setExam(y); showNext(); } });
+    if (nx) p.textContent = `Exam list ${nx.list} · ${nx.pos + 1} of ${nx.total} · Scan next: ${nextLabel(nx)}`;
+    else {
+      const l = x.current + 1, nextList = x.lists.findIndex((L, i) => i > x.current && L.pos < L.queue.length);
+      p.textContent = x.lists.every(L => L.pos >= L.queue.length) ? "All three exam lists finished. Download the zip."
+        : nextList >= 0 ? `Exam list ${l} finished: ${x.lists[x.current].queue.length} scans. Download the zip, then tap Exam list ${nextList + 1}.`
+        : `Exam list ${l} finished. Download the zip, then tap an unfinished list above.`;
+    }
   }
   panel.querySelector("#tlExam").onchange = showNext;
   let examArmed = false;
   panel.querySelector("#tlExamReset").onclick = ev => {
-    if (!examArmed) { examArmed = true; ev.target.textContent = "Tap again to deal a fresh list and forget the position"; return; }
-    dealExam(); examArmed = false; ev.target.textContent = "Start the exam list again from scan 1"; showNext();
+    if (!examArmed) { examArmed = true; ev.target.textContent = "Tap again to deal three fresh lists and forget every position"; return; }
+    dealExam(); examArmed = false; ev.target.textContent = "Start the exam again from list 1"; showNext();
   };
   showNext();
 
@@ -127,8 +153,9 @@
       trace: d.trace || [], rejected: d.rejected || [], crop: d.crop, frame: d.frame, truth: null, correct: null };
     const nx = examNext();
     if (nx) {   // exam mode: the truth was decided before the scan - save at once, no tap needed
-      const x = getExam(); x.pos = nx.pos + 1; setExam(x);
-      entry.truth = nx.key; entry.exam = nx.pos + 1; entry.correct = entry.type === "answer" && entry.guess === nx.key;
+      const x = getExam(); x.lists[nx.list - 1].pos = nx.pos + 1; setExam(x);
+      entry.truth = nx.key; entry.exam = nx.pos + 1; entry.examList = nx.list;
+      entry.correct = nx.key === "none" ? entry.type !== "answer" : entry.type === "answer" && entry.guess === nx.key;   // a Nothing shot is right when nothing was answered
       await put(entry); record(entry); await stats(); showNext();
       showExam(entry, nx);
     } else {
@@ -141,14 +168,14 @@
   function showExam(e, nx) {
     const cur = panel.querySelector("#tlCurrent"), after = examNext();
     cur.innerHTML = `<div class="tl-card">
-      <strong>Scan ${e.n} (exam ${nx.pos + 1} of ${nx.total})</strong>
+      <strong>Scan ${e.n} (exam list ${nx.list}, ${nx.pos + 1} of ${nx.total})</strong>
       <div class="tl-pics"><div><img src="${e.frame}" alt=""><small>Camera view</small></div><div><img src="${e.crop}" alt=""><small>Close-up it read</small></div></div>
       ${numbers(e)}
-      <span class="${e.correct ? "ok" : "bad"}">Expected ${esc(name(nx.key))}: ${e.correct ? "right" : e.type === "answer" ? `wrong, it said ${esc(name(e.guess))}` : "no answer"} - saved</span>
-      <div class="tl-row"><button class="btn btn-dark" id="tlNext" type="button">${after ? `Next: ${esc(name(after.key))}` : "Done"}</button><button class="btn btn-outline-dark" id="tlOther" type="button">I scanned something else</button></div></div>`;
+      <span class="${e.correct ? "ok" : "bad"}">Expected ${esc(name(nx.key))}: ${e.correct ? (nx.key === "none" ? "right, no answer" : "right") : e.type === "answer" ? `wrong, it said ${esc(name(e.guess))}` : "no answer"} - saved</span>
+      <div class="tl-row"><button class="btn btn-dark" id="tlNext" type="button">${after ? `Next: ${esc(nextLabel(after))}` : "List done"}</button><button class="btn btn-outline-dark" id="tlOther" type="button">I scanned something else</button></div></div>`;
     cur.querySelector("#tlNext").onclick = () => { window.scrollTo({ top: 0, behavior: "smooth" }); if (after) document.getElementById("camBtn").click(); };
     cur.querySelector("#tlOther").onclick = () => {   // the expected chocolate still needs scanning: step the list back, and label this scan by hand
-      const x = getExam(); x.pos = nx.pos; setExam(x); e.truth = null; e.correct = null; e.exam = null; showNext(); show(e);
+      const x = getExam(); x.lists[nx.list - 1].pos = nx.pos; setExam(x); e.truth = null; e.correct = null; e.exam = null; e.examList = null; showNext(); show(e);
     };
   }
 
