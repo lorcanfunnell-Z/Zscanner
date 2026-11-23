@@ -4,12 +4,13 @@
   "test-5",
   "test-6",
   "test-7",
-  "test-13"
+  "test-13",
+  "test-14"
  ],
  "inGallery": [
   "test-3",
   "2026-10-28",
   "2026-11-03"
  ],
- "note": "test-4 and test-5 are still genuinely never-trained-on, but have now been used repeatedly to pick decision rules (E, then A) by eye - they're no longer a fresh check for that purpose, just for retraining. test-7 (3 Nov afternoon, 27 labelled scans) is the current fresh session for rule decisions; keep adding each new one here until it's deliberately folded into the gallery like test-3 was. test-7's entry n=26 had its truth corrected from 21 to 22 in test-log.json/csv - a confirmed admin mis-tap, not a model issue (see CLAUDE.md, 3 Nov afternoon test). test-13 (16 Nov, 27 scans, the NEW chocolates on the white card in room light, scanner-v59, the first session with the phone's chocoprint vector and gap logged) is held back too."
+ "note": "test-4 and test-5 are still genuinely never-trained-on, but have now been used repeatedly to pick decision rules (E, then A) by eye - they're no longer a fresh check for that purpose, just for retraining. test-7 (3 Nov afternoon, 27 labelled scans) is the current fresh session for rule decisions; keep adding each new one here until it's deliberately folded into the gallery like test-3 was. test-7's entry n=26 had its truth corrected from 21 to 22 in test-log.json/csv - a confirmed admin mis-tap, not a model issue (see CLAUDE.md, 3 Nov afternoon test). test-13 (16 Nov, 27 scans, the NEW chocolates on the white card in room light, scanner-v59, the first session with the phone's chocoprint vector and gap logged) is held back too. test-14 (23 Nov 13:49-14:19, Exam list 1 on the fresh chocolates, scanner-v63: the 120 dealt scans - every chocolate 4 times then 8 Nothing shots - plus 12 scans redone with 'I scanned something else' and 2 warm-up scans before a restart; 134 in all) is held back: the exam measures the live rule and must never be trained on or put in the gallery."
 }

@@ -1,4 +1,4 @@
-closeup: 139 scans, found 139, too dark 2, answered 114, wrong 7 11→10 20→21 20→24 19→13 zdark→5 6→9 7→4| chips 23 (truth among them 21)
-  vs the live rule: verdict: can't tell from this many scans   (wrong answers 7 -> 7 became wrong 6, stopped being wrong 6 exact McNemar p = 1.0000)
-camera: 139 scans, found 139, too dark 3, answered 94, wrong 3 20→21 19→13 zdark→5| chips 42 (truth among them 34)
-  vs the live rule: verdict: real regression (answered right 106 -> 91, wrong answers not significantly different, p = 0.0237)   (wrong answers 7 -> 3 became wrong 2, stopped being wrong 6 exact McNemar p = 0.2891)
+closeup: 263 scans, found 263, too dark 2, answered 210, wrong 20 11→10 20→21 20→24 19→13 zdark→5 6→9 7→4 20→21 19→13 19→13 5→6 11→17 19→18 19→13 19→13 19→13 19→13 19→13 24→22 9→6| chips 51 (truth among them 48)
+  vs the live rule: verdict: can't tell from this many scans   (wrong answers 14 -> 20 became wrong 13, stopped being wrong 7 exact McNemar p = 0.2632)
+camera: 263 scans, found 263, too dark 3, answered 172, wrong 19 20→21 19→13 zdark→5 5→15 12→19 20→21 18→13 20→21 20→21 zmilk→zdark 19→13 22→23 19→13 15→23 11→17 5→6 zmilk→zdark 19→13 9→6| chips 88 (truth among them 70)
+  vs the live rule: verdict: real regression (answered right 191 -> 153, wrong answers not significantly different, p = 0.0000)   (wrong answers 14 -> 19 became wrong 15, stopped being wrong 10 exact McNemar p = 0.4244)
