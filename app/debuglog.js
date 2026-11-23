@@ -12,6 +12,7 @@
   const tx = ZIdbStore.openStore("zscanner-tests", "scans", { keyPath: "n" });
   const memory = new Map();
   const put = async e => { memory.set(e.n, e); try { await tx("readwrite", s => s.put(e)); } catch (err) { console.warn("kept in memory only", err); } };
+  window.ZTESTLOG = { all: () => all() };   // 23 Nov: for tools/browser_smoke.js, which checks what Exam mode actually stored
   const all = async () => { let rows = []; try { rows = await tx("readonly", s => s.getAll()) || []; } catch (e) {} const m = new Map(rows.map(r => [r.n, r])); memory.forEach((v, k) => m.set(k, v)); return [...m.values()].sort((a, b) => a.n - b.n); };
   const clear = async () => { memory.clear(); try { await tx("readwrite", s => s.clear()); } catch (e) {} };
   const noteKey = "zscanner-test-note";
@@ -33,7 +34,8 @@
   .tl-pics small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
   .tl table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
   .tl td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top} .tl td:first-child{color:var(--muted);width:42%}
-  .tl-row{display:flex;gap:8px} .tl-row .btn{flex:1;min-height:46px}
+  .tl-row{display:flex;gap:8px} .tl-row .btn{flex:1;min-height:46px;padding:0 10px;letter-spacing:.08em;line-height:1.25}
+  #tlLists .btn{padding:0 6px;min-width:0;letter-spacing:.06em;font-size:11px;line-height:1.25} #tlLists small{font-size:11px;letter-spacing:0;text-transform:none}
   .tl-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
   .tl-grid button{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 0;font:400 16px var(--serif);cursor:pointer}
   .tl-grid button.w{grid-column:span 2;font:500 10px var(--sans);letter-spacing:.12em;text-transform:uppercase}
@@ -94,15 +96,15 @@
     const key = L.queue[L.pos], firstNothing = L.queue.length - EXAM_NOTHING;
     return { key, pos: L.pos, total: L.queue.length, list: x.current + 1, idea: key === "none" ? NOTHING_IDEAS[(L.pos - firstNothing + EXAM_NOTHING) % NOTHING_IDEAS.length] : null };
   }
-  const nextLabel = nx => `${name(nx.key)}${nx.idea ? ` (point at ${nx.idea})` : ""}`;
+  const nextLabel = (nx, short) => `${name(nx.key)}${nx.idea ? (short ? ` - ${nx.idea}` : ` (point at ${nx.idea})`) : ""}`;
   function showNext() {
     const nx = examNext(), p = panel.querySelector("#tlNext"), r = panel.querySelector("#tlExamReset"), lb = panel.querySelector("#tlLists");
     r.hidden = lb.hidden = !examOn();
     if (!examOn()) { p.textContent = ""; return; }
     const x = getExam() || dealExam();
-    lb.innerHTML = x.lists.map((L, i) => `<button type="button" class="btn ${i === x.current ? "btn-dark" : "btn-outline-dark"}" data-list="${i}">Exam list ${i + 1}<br><small>${L.pos >= L.queue.length ? "done" : `${L.pos} of ${L.queue.length}`}</small></button>`).join("");
-    lb.querySelectorAll("button").forEach(b => b.onclick = () => { const y = getExam(); if (y) { y.current = +b.dataset.list; setExam(y); showNext(); } });
-    if (nx) p.textContent = `Exam list ${nx.list} · ${nx.pos + 1} of ${nx.total} · Scan next: ${nextLabel(nx)}`;
+    lb.innerHTML = x.lists.map((L, i) => `<button type="button" class="btn ${i === x.current ? "btn-dark" : "btn-outline-dark"}" data-list="${i}">List ${i + 1}<br><small>${L.pos >= L.queue.length ? "done" : `${L.pos}/${L.queue.length}`}</small></button>`).join("");
+    lb.querySelectorAll("button").forEach(b => b.onclick = () => { const y = getExam(); if (y && y.current !== +b.dataset.list) { y.current = +b.dataset.list; setExam(y); panel.querySelector("#tlCurrent").innerHTML = ""; showNext(); } });
+    if (nx) p.textContent = `Exam list ${nx.list} · ${nx.pos + 1} of ${nx.total} · Scan next: ${nextLabel(nx)}${nx.key === "none" ? " · if nothing is framed after 10 s, tap ✕ to save it" : ""}`;
     else {
       const l = x.current + 1, nextList = x.lists.findIndex((L, i) => i > x.current && L.pos < L.queue.length);
       p.textContent = x.lists.every(L => L.pos >= L.queue.length) ? "All three exam lists finished. Download the zip."
@@ -110,7 +112,9 @@
         : `Exam list ${l} finished. Download the zip, then tap an unfinished list above.`;
     }
   }
-  panel.querySelector("#tlExam").onchange = showNext;
+  const EXAM_ON = "zscanner-exam-on";   // 23 Nov: the tick survives a reload (iOS reloads a backgrounded tab), so a sitting cannot silently drop out of Exam mode
+  panel.querySelector("#tlExam").onchange = () => { try { localStorage.setItem(EXAM_ON, examOn() ? "1" : ""); } catch {} showNext(); };
+  try { panel.querySelector("#tlExam").checked = !!localStorage.getItem(EXAM_ON); } catch {}
   let examArmed = false;
   panel.querySelector("#tlExamReset").onclick = ev => {
     if (!examArmed) { examArmed = true; ev.target.textContent = "Tap again to deal three fresh lists and forget every position"; return; }
@@ -120,13 +124,16 @@
 
   async function stats() {
     tallyLine();
-    const rows = await all(), labelled = rows.filter(r => r.correct !== undefined && r.correct !== null);
+    const rows = await all(), all_labelled = rows.filter(r => r.correct !== undefined && r.correct !== null);
+    const nothing = all_labelled.filter(r => r.truth === "none"), labelled = all_labelled.filter(r => r.truth !== "none");   // 23 Nov: Nothing shots are counted apart, as scorecard.py does
     const right = labelled.filter(r => r.correct).length, wrong = labelled.filter(r => r.type === "answer" && !r.correct).length;
     const none = labelled.filter(r => r.type === "noanswer" || r.type === "unsure").length;   // unsure (13 Nov): not certain by the 5 s deadline, choices offered - not an answer, never counts as wrong
+    const nothingWrong = nothing.filter(r => r.type === "answer").length;
     panel.querySelector("#tlStats").innerHTML = `
       <div><b>${labelled.length}</b><span>scans</span></div><div><b>${right}</b><span>right</span></div>
       <div><b>${wrong}</b><span>wrong</span></div><div><b>${labelled.length ? Math.round(100 * right / labelled.length) : 0}%</b><span>accuracy</span></div>`
-      + (none ? `<div style="grid-column:1/-1"><span>${none} gave no answer</span></div>` : "");
+      + (none ? `<div style="grid-column:1/-1"><span>${none} gave no answer</span></div>` : "")
+      + (nothing.length ? `<div style="grid-column:1/-1"><span>${nothing.length} Nothing shot${nothing.length === 1 ? "" : "s"}: ${nothingWrong ? `${nothingWrong} answered (wrong)` : "none answered (all right)"}</span></div>` : "");
   }
 
   // ---------- running total across ALL test sessions on this phone, per model (clearing the log keeps it) ----------
@@ -134,7 +141,10 @@
   // (U = 3.0 for 0 wrong, 4.7 for 1, 6.3 for 2, …), so N = A / U. This is how many fair scans a claim needs.
   const TALLY = "zscanner-tally-v1";
   const getTally = () => { try { return JSON.parse(localStorage.getItem(TALLY)) || {}; } catch { return {}; } };
-  const record = e => { const t = getTally(), m = (window.Recognizer && Recognizer.model) || "model"; (t[m] = t[m] || {})[e.at] = [e.type === "answer" ? 1 : 0, e.correct ? 1 : 0]; try { localStorage.setItem(TALLY, JSON.stringify(t)); } catch {} };
+  const saveTally = t => { try { localStorage.setItem(TALLY, JSON.stringify(t)); } catch {} };
+  const record = e => { if (!e.truth || e.truth === "none") return unrecord(e);   // 23 Nov: an unlabelled row or a Nothing shot never enters the chocolate tally
+    const t = getTally(), m = (window.Recognizer && Recognizer.model) || "model"; (t[m] = t[m] || {})[e.at] = [e.type === "answer" ? 1 : 0, e.correct ? 1 : 0]; saveTally(t); };
+  const unrecord = e => { const t = getTally(), m = (window.Recognizer && Recognizer.model) || "model"; if (t[m] && t[m][e.at]) { delete t[m][e.at]; saveTally(t); } };
   function tallyLine() {
     const m = (window.Recognizer && Recognizer.model) || "model", rows = Object.values(getTally()[m] || {});
     const scans = rows.length, answered = rows.filter(r => r[0]).length, wrong = rows.filter(r => r[0] && !r[1]).length;
@@ -171,11 +181,13 @@
       <strong>Scan ${e.n} (exam list ${nx.list}, ${nx.pos + 1} of ${nx.total})</strong>
       <div class="tl-pics"><div><img src="${e.frame}" alt=""><small>Camera view</small></div><div><img src="${e.crop}" alt=""><small>Close-up it read</small></div></div>
       ${numbers(e)}
-      <span class="${e.correct ? "ok" : "bad"}">Expected ${esc(name(nx.key))}: ${e.correct ? (nx.key === "none" ? "right, no answer" : "right") : e.type === "answer" ? `wrong, it said ${esc(name(e.guess))}` : "no answer"} - saved</span>
-      <div class="tl-row"><button class="btn btn-dark" id="tlNext" type="button">${after ? `Next: ${esc(nextLabel(after))}` : "List done"}</button><button class="btn btn-outline-dark" id="tlOther" type="button">I scanned something else</button></div></div>`;
+      <span class="${e.correct ? "ok" : "bad"}">Expected ${esc(name(nx.key))}: ${e.correct ? (nx.key !== "none" ? "right" : e.type === "unsure" ? "right, not certain after its full clock" : e.frames ? `right, no answer (camera closed by hand after ${e.frames} frames - better to let it run its clock)` : "right, nothing was ever framed") : e.type === "answer" ? `wrong, it said ${esc(name(e.guess))}` : "no answer"} - saved</span>
+      <div class="tl-row"><button class="btn btn-dark" id="tlNext" type="button">${after ? `Next: ${esc(nextLabel(after, true))}` : "List done"}</button><button class="btn btn-outline-dark" id="tlOther" type="button">I scanned something else</button></div></div>`;
     cur.querySelector("#tlNext").onclick = () => { window.scrollTo({ top: 0, behavior: "smooth" }); if (after) document.getElementById("camBtn").click(); };
     cur.querySelector("#tlOther").onclick = () => {   // the expected chocolate still needs scanning: step the list back, and label this scan by hand
-      const x = getExam(); x.lists[nx.list - 1].pos = nx.pos; setExam(x); e.truth = null; e.correct = null; e.exam = null; e.examList = null; showNext(); show(e);
+      const x = getExam(); x.lists[nx.list - 1].pos = nx.pos; setExam(x); e.truth = null; e.correct = null; e.exam = null; e.examList = null;
+      put(e).then(() => { unrecord(e); stats(); });   // 23 Nov: stored as unlabelled straight away, so a reload before the hand label cannot export the exam verdict
+      showNext(); show(e);
     };
   }
 
@@ -185,10 +197,10 @@
       <tr><td>Answer</td><td>${e.type === "answer" ? `<b>${esc(name(e.guess))}</b>` : e.type === "unsure" ? "No answer: not certain within 5 s, the likeliest three were offered" : "No answer (you closed the camera)"}</td></tr>
       <tr><td>Average over the hold</td><td>${t(e.avgTop3)}</td></tr>
       <tr><td>Last frame alone</td><td>${t(e.nowTop3)}</td></tr>
-      <tr><td>Shell colour seen</td><td>${e.shell}</td></tr>
+      <tr><td>Shell colour seen</td><td>${e.shell || "-"}</td></tr>
       <tr><td>Tilt sensor</td><td>${e.tiltPermission || "not recorded"}</td></tr>
-      <tr><td>Mark seen</td><td>${{ one: "one digit", two: "two digits", z: "z" }[e.mark] || e.mark}</td></tr>
-      <tr><td>Frames averaged</td><td>${e.frames} over ${(e.holdMs / 1000).toFixed(1)}s</td></tr>
+      <tr><td>Mark seen</td><td>${{ one: "one digit", two: "two digits", z: "z" }[e.mark] || e.mark || "-"}</td></tr>
+      <tr><td>Frames averaged</td><td>${e.frames ? `${e.frames} over ${((e.holdMs || 0) / 1000).toFixed(1)}s` : "none - nothing was framed"}</td></tr>
       <tr><td>Time to answer</td><td>${(e.ms / 1000).toFixed(1)}s${e.seenMs != null ? ` (${(e.seenMs / 1000).toFixed(1)}s after the chocolate was first seen)` : ""}</td></tr>
       <tr><td>Frames recorded</td><td>${(e.trace || []).length}</td></tr>
       <tr><td>Frames rejected</td><td>${(e.rejected || []).length ? (e.rejected || []).length + " (" + Object.entries((e.rejected || []).reduce((c, f) => (c[f.reason] = (c[f.reason] || 0) + 1, c), {})).map(([k, v]) => `${k} ${v}`).join(", ") + ")" : "0"}</td></tr></table>`;
@@ -226,8 +238,8 @@
     const zip = new JSZip();
     const data = rows.map(({ crop, frame, ...rest }) => rest);
     zip.file("test-log.json", JSON.stringify(data, null, 2));
-    const csv = ["scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s,version,models,model"].concat(data.map(r =>
-      [r.n, r.at, JSON.stringify(r.note || ""), r.type, r.guess || "", r.truth || "", r.correct, r.avgTop3?.[0]?.key, r.avgTop3?.[0]?.p, r.avgTop3?.[1]?.key, r.avgTop3?.[1]?.p, r.shell, r.mark, r.frames, (r.holdMs / 1000).toFixed(1), (r.ms / 1000).toFixed(1), r.build?.version || "", r.build?.models || "", r.build?.model || ""].join(",")));
+    const csv = ["scan,time,note,type,guess,truth,correct,avg1,avg1p,avg2,avg2p,shell,mark,frames,hold_s,time_s,version,models,model,exam_list,exam_pos"].concat(data.map(r =>
+      [r.n, r.at, JSON.stringify(r.note || ""), r.type, r.guess || "", r.truth || "", r.correct, r.avgTop3?.[0]?.key, r.avgTop3?.[0]?.p, r.avgTop3?.[1]?.key, r.avgTop3?.[1]?.p, r.shell, r.mark, r.frames, ((r.holdMs || 0) / 1000).toFixed(1), (r.ms / 1000).toFixed(1), r.build?.version || "", r.build?.models || "", r.build?.model || "", r.examList ?? "", r.exam ?? ""].join(",")));
     zip.file("test-log.csv", csv.join("\n"));
     const b64 = u => u && u.split(",")[1];
     rows.forEach(r => {

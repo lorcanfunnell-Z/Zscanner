@@ -132,13 +132,17 @@ def nothing_table(sessions):
     rows = [(s, r) for s, r in rows if r]
     if not rows: return
     print("\nNothing shots (not a chocolate: no answer is right, any answer is wrong) - scored separately:")
-    print(f"{'session':22s}{'shots':>6s}{'answered (wrong)':>18s}{'wrong per 100 shots (95% range)':>34s}")
-    tot_n = tot_a = 0
+    print(f"{'session':22s}{'shots':>6s}{'answered (wrong)':>18s}{'held out':>10s}{'never framed':>14s}{'closed early':>14s}{'wrong per 100 shots (95% range)':>34s}")
+    tot = [0, 0, 0, 0, 0]
     for s, r in rows:
-        n = len(r); a = sum(1 for e in r if e.get("type") == "answer"); tot_n += n; tot_a += a
-        lo, hi = wilson(a, n); print(f"{s:22s}{n:6d}{a:18d}{100 * a / n:14.1f} ({100 * lo:5.1f} - {100 * hi:5.1f})")
+        # how each one ended: answered (wrong); "unsure" = the scanner ran its full clock and declined (the clean pass);
+        # "noanswer" with no frame held = nothing was ever framed (the X saved it); "noanswer" after frames = closed by hand early
+        n = len(r); a = sum(1 for e in r if e.get("type") == "answer"); u = sum(1 for e in r if e.get("type") == "unsure")
+        s0 = sum(1 for e in r if e.get("type") == "noanswer" and not e.get("frames")); s1 = sum(1 for e in r if e.get("type") == "noanswer" and e.get("frames"))
+        for i, v in enumerate((n, a, u, s0, s1)): tot[i] += v
+        lo, hi = wilson(a, n); print(f"{s:22s}{n:6d}{a:18d}{u:10d}{s0:14d}{s1:14d}{100 * a / n:14.1f} ({100 * lo:5.1f} - {100 * hi:5.1f})")
     if len(rows) > 1:
-        lo, hi = wilson(tot_a, tot_n); print(f"{'pooled':22s}{tot_n:6d}{tot_a:18d}{100 * tot_a / tot_n:14.1f} ({100 * lo:5.1f} - {100 * hi:5.1f})")
+        n, a, u, s0, s1 = tot; lo, hi = wilson(a, n); print(f"{'pooled':22s}{n:6d}{a:18d}{u:10d}{s0:14d}{s1:14d}{100 * a / n:14.1f} ({100 * lo:5.1f} - {100 * hi:5.1f})")
 
 # A result set is a list of {"id", "truth", "said", "outcome"} with outcome in {"right", "wrong", "none"} (none = not answered).
 RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.STOP_WALL5, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = the wall-clock 5 s stop, live 13-17 Nov; E+forced5 was live 3-13 Nov; LIVE = 5 s of usable frames + 10 s ceiling since 17 Nov

@@ -196,6 +196,7 @@
   if (!canLive) $("#camLabel").textContent = "Take a photo";
 
   async function startCamera() {
+    lastInfo = null; trace = []; rejected = [];   // 23 Nov: never let an X tapped before this scan has started report the previous scan's numbers
     // 13 Nov: open the camera straight away and prepare the scanner at the same time, instead of making a first-time
     // visitor stare at a progress line for the whole ~8 MB download before the viewfinder even appears. The hint in
     // the viewfinder shows the progress; scanning starts the moment the models are ready.
@@ -221,6 +222,7 @@
     if (!stream) return;                                               // the camera was closed while the models were still loading
     setStatus(""); $("#hint").textContent = "Point the camera at one chocolate";
     held = []; settle = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; usableMs = 0; lastUsable = 0; trace = []; rejected = []; lastScan = null; fixing = false;
+    scanning = true;
     loop();
     // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -
     // which on iOS also means it is outside the tap and never granted (see requestTiltPermission). The admin page asks
@@ -229,6 +231,7 @@
   }
 
   function stopCamera(label = "Scan another") {
+    scanning = false;
     clearTimeout(timer); timer = null;
     if (torchOn) try { videoTrack?.applyConstraints({ advanced: [{ torch: false }] }); } catch (e) {}
     stream?.getTracks().forEach(t => t.stop()); stream = null; videoTrack = null; torchOn = false;
@@ -270,6 +273,7 @@
   let held = [], holdStart = 0;            // frames collected during the current hold
   let settle = [];                         // frames seen before the hold starts (settle gate, 13 Nov)
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
+  let scanning = false;                     // the live loop is running (23 Nov: so a Stop with no frame held can still be logged on the admin page)
   let firstSeen = 0, trace = [];             // admin only: every readable frame of this scan, so any rule can be replayed offline
   let firstClearSeen = 0;   // live on both pages: first frame that actually passed the quality gate (not just detected) - the deadline clock starts here, not at first detection, so an initial blurry/focus-hunting stretch doesn't eat into the budget
   let usableMs = 0, lastUsable = 0;   // 17 Nov: the usable-frame clock - advances by the gap to the previous usable frame, capped at USABLE_GAP_MS, so rejected stretches do not count
@@ -282,8 +286,13 @@
     return c.toDataURL("image/jpeg", 0.8);
   }
   function report(type, guess) {
-    if (!DEBUG || !lastInfo) return;
-    window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...lastInfo, ms: Math.round(performance.now() - scanStart),
+    if (!DEBUG) return;
+    // 23 Nov: a scan closed before any frame was held (nothing the finder would frame - the useful outcome for an exam
+    // "Nothing" shot, or a mis-tap) is still logged, as a "noanswer" with 0 frames, so the exam list can move on. Only
+    // while the live loop is actually running: an X before the camera has started logs nothing.
+    if (!lastInfo && !scanning) return;
+    const info = lastInfo || { avgTop3: [], nowTop3: [], shell: null, mark: null, frames: 0, holdMs: 0 };
+    window.dispatchEvent(new CustomEvent("zscan", { detail: { type, guess, ...info, ms: Math.round(performance.now() - scanStart),
       seenMs: firstSeen ? Math.round(performance.now() - firstSeen) : null,
       clearMs: firstClearSeen ? Math.round(performance.now() - firstClearSeen) : null,   // time since the first frame good enough to actually use - compare with seenMs to see how much was lost to initial blur/focus-hunting
       tiltPermission, loadMs: Math.round(Recognizer.loadMs || 0),   // how long the scanner took to be ready this visit (download + warm-up), never saved anywhere before 13 Nov

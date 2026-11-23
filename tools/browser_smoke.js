@@ -65,12 +65,56 @@ const { edgeAngle } = require("../training/align_lib.js");
     let label = ""; const watch = setInterval(() => { const b = document.querySelector("#finderBox"); if (b && !b.hidden) label = b.dataset.label; }, 50);
     document.querySelector("#status").textContent = "";   // the photo upload above left "Found: N°21" here; wait for the live scan's own result
     document.querySelector("#camBtn").click();
-    const t0 = performance.now(); let status = "";
-    while (performance.now() - t0 < 9000) { status = document.querySelector("#status").textContent.trim(); if (/Found|certain/.test(status)) break; await new Promise(r => setTimeout(r, 100)); }
+    const t0 = performance.now(); let status = "", last = ""; const timeline = [];   // 23 Nov: the hint's changes, printed when the scan does not answer, so a stall can be placed
+    while (performance.now() - t0 < 12000) {
+      status = document.querySelector("#status").textContent.trim(); const k = status.slice(0, 40) + " | " + document.querySelector("#hint").textContent.slice(0, 110);
+      if (k !== last && timeline.length < 30) { timeline.push(`${Math.round(performance.now() - t0)}ms ${k}`); last = k; }
+      if (/Found|certain/.test(status)) break; await new Promise(r => setTimeout(r, 100));
+    }
     clearInterval(watch);
-    return { status: status || "(no result within 9 s)", label };
+    return { status: status || "(no result within 12 s)", label, timeline };
   });
   ok(/N°18/.test(adminLive.status) && /box \d+%/.test(adminLive.label), `admin live loop: ${adminLive.status}; finder box overlay: "${adminLive.label}"`);
+  if (!/N°18/.test(adminLive.status)) console.log("        timeline:\n" + adminLive.timeline.map(t => "          " + t).join("\n"));
+  // 23 Nov: the exam RECORDING path, end to end on the real page - a Nothing item that the scanner answers must be stored as a
+  // wrong Nothing shot and move the list on; "I scanned something else" must step the list back AND store the cleared row;
+  // an X with nothing framed must still be saved (a "noanswer" with 0 frames) so the list can move on; the tick survives a reload.
+  const examRec = await a.evaluate(async () => {
+    const cb = document.querySelector("#tlExam"); localStorage.removeItem("zscanner-exam-v2"); cb.checked = true; cb.dispatchEvent(new Event("change"));
+    const x = JSON.parse(localStorage.getItem("zscanner-exam-v2")); x.current = 0; x.lists[0].pos = 112; localStorage.setItem("zscanner-exam-v2", JSON.stringify(x)); cb.dispatchEvent(new Event("change"));
+    const line0 = document.querySelector("#tlNext").textContent;
+    const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = "images/18.jpg"; });
+    const cv = document.createElement("canvas"); cv.width = cv.height = 640; const cx = cv.getContext("2d"); cx.drawImage(img, 0, 0, 640, 640);
+    const redraw = setInterval(() => cx.drawImage(img, 0, 0, 640, 640), 100);   // captureStream only delivers frames that change
+    navigator.mediaDevices.getUserMedia = async () => cv.captureStream(15);
+    document.querySelector("#status").textContent = ""; document.querySelector("#camBtn").click();
+    let t0 = performance.now(), status = "";
+    while (performance.now() - t0 < 12000) { status = document.querySelector("#status").textContent.trim(); if (/Found|certain/.test(status)) break; await new Promise(r => setTimeout(r, 100)); }
+    await new Promise(r => setTimeout(r, 500));
+    const pos = () => JSON.parse(localStorage.getItem("zscanner-exam-v2")).lists[0].pos;
+    const card1 = document.querySelector("#tlCurrent").textContent.replace(/\s+/g, " "), pos1 = pos(), stats1 = document.querySelector("#tlStats").textContent.replace(/\s+/g, " ");
+    const rows1 = await window.ZTESTLOG.all(); const l1 = rows1[rows1.length - 1]; const last1 = { truth: l1.truth, correct: l1.correct, exam: l1.exam, examList: l1.examList, type: l1.type, n: l1.n };   // a copy: the log hands out its live objects
+    const other = document.querySelector("#tlOther"); if (other) other.click(); await new Promise(r => setTimeout(r, 400));
+    const pos2 = pos(); const rows2 = await window.ZTESTLOG.all(); const l2 = rows2[rows2.length - 1]; const last2 = { truth: l2.truth, correct: l2.correct, exam: l2.exam, n: l2.n };
+    // an X with nothing framed: a grey canvas the finder never "finds", then Stop
+    cx.fillStyle = "#777"; cx.fillRect(0, 0, 640, 640); clearInterval(redraw); const redraw2 = setInterval(() => { cx.fillStyle = "#777"; cx.fillRect(0, 0, 640, 640); cx.fillStyle = "#7a7a7a"; cx.fillRect(Math.random() * 600, 0, 20, 20); }, 100);
+    cb.dispatchEvent(new Event("change")); document.querySelector("#status").textContent = ""; document.querySelector("#camBtn").click();
+    await new Promise(r => setTimeout(r, 2500)); const hint = document.querySelector("#hint").textContent;
+    document.querySelector("#stopBtn").click(); await new Promise(r => setTimeout(r, 500)); clearInterval(redraw2);
+    const pos3 = pos(); const rows3 = await window.ZTESTLOG.all(); const l3 = rows3[rows3.length - 1]; const last3 = { truth: l3.truth, correct: l3.correct, type: l3.type, frames: l3.frames, exam: l3.exam };
+    const card3 = document.querySelector("#tlCurrent").textContent.replace(/\s+/g, " ");
+    const tick = localStorage.getItem("zscanner-exam-on");
+    cb.checked = false; cb.dispatchEvent(new Event("change")); localStorage.removeItem("zscanner-exam-v2");
+    return { line0, card1, pos1, stats1, last1, pos2, last2: { ...last2, n2: last2.n, n1: last1.n }, hint, pos3, last3, card3, tick };
+  });
+  const rec1 = { line: /113 of 120 · Scan next: nothing \(point at the box lid\)/.test(examRec.line0), card: /Expected nothing: wrong, it said N°18/.test(examRec.card1), pos: examRec.pos1 === 113,
+    row: examRec.last1.truth === "none" && examRec.last1.correct === false && examRec.last1.exam === 113 && examRec.last1.examList === 1, stats: /1 Nothing shot: 1 answered \(wrong\)/.test(examRec.stats1) && /\b0\s*scans/.test(examRec.stats1) };
+  ok(Object.values(rec1).every(Boolean), `exam recording: an answered Nothing shot is stored as wrong, moves the list on and stays out of the chocolate counts (stats "${examRec.stats1.trim()}")`);
+  if (!Object.values(rec1).every(Boolean)) console.log("        exam recording detail: " + JSON.stringify({ rec1, line0: examRec.line0, pos1: examRec.pos1, last1: examRec.last1, card1: examRec.card1.slice(0, 300) }));
+  ok(examRec.pos2 === 112 && examRec.last2.n2 === examRec.last2.n1 && examRec.last2.truth === null && examRec.last2.correct === null && examRec.last2.exam === null,
+     `"I scanned something else" steps the list back to 112 and stores the row as unlabelled (truth ${examRec.last2.truth}, exam ${examRec.last2.exam})`);
+  ok(/Hold the camera above one chocolate/.test(examRec.hint) && examRec.pos3 === 113 && examRec.last3.truth === "none" && examRec.last3.correct === true && examRec.last3.type === "noanswer" && examRec.last3.frames === 0 && /nothing was ever framed/.test(examRec.card3) && examRec.tick === "1",
+     `an X with nothing framed saves a right Nothing shot with 0 frames and moves the list on ("${examRec.card3.slice(0, 90)}…"); the Exam tick is remembered`);
   const c = await ctx.newPage(), cr = await run(c, "http://localhost:8767/index.html", false);
   ok(await c.evaluate(() => Recognizer.model) === "model6", "client page runs model 6");
   ok(!(await c.$(".adminbar")) && !(await c.$("section.tl")) && (await c.$$(".hk, .hk-heart, .hk-tasting")).length === 0, "client page: no admin tools, no hooks");

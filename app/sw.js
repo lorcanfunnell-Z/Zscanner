@@ -2,7 +2,7 @@
 // Bump VERSION whenever a page/code file changes so phones pick up the new version.
 // Bump MODEL_VERSION only when a model file changes: models are big (several MB) and are loaded from the phone
 // after the first visit (cache first), so a second visit doesn't download them again.
-const VERSION = "scanner-v62";   // 23 Nov: Exam mode deals three lists of 120 (every chocolate 4 times, then 8 Nothing shots), with list buttons   // 13 Nov: every admin test-log entry records the build (VERSION, MODEL_VERSION, model folder), shown on the admin page
+const VERSION = "scanner-v63";   // 23 Nov: Exam mode with three lists and Nothing shots, after an independent review: a never-framed Nothing shot can be saved with the X, the tick survives a reload, Nothing shots stay out of the stats and the tally
 const MODEL_VERSION = "models-6.1.4";   // 13 Nov: the gallery is downloaded as 16-bit gallery.bin + gallery.pack.json (same 1409 references)
 // choc3d/ (the 3D result-card mesh + materials, 3 Nov) treated the same as a model: large, static once published,
 // only ever needed after a chocolate is identified - cache once and keep, rather than refetching every visit.
