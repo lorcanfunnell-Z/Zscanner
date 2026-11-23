@@ -182,6 +182,7 @@
       <div class="tl-pics"><div><img src="${e.frame}" alt=""><small>Camera view</small></div><div><img src="${e.crop}" alt=""><small>Close-up it read</small></div></div>
       ${numbers(e)}
       <span class="${e.correct ? "ok" : "bad"}">Expected ${esc(name(nx.key))}: ${e.correct ? (nx.key !== "none" ? "right" : e.type === "unsure" ? "right, not certain after its full clock" : e.frames ? `right, no answer (camera closed by hand after ${e.frames} frames - better to let it run its clock)` : "right, nothing was ever framed") : e.type === "answer" ? `wrong, it said ${esc(name(e.guess))}` : "no answer"} - saved</span>
+      <small style="display:block;color:var(--muted);line-height:1.4">Right, wrong or not certain: tap Next and never scan the same one again - a wrong answer is exactly what the exam measures. "I scanned something else" is only for when the chocolate under the camera was not the one asked for.</small>
       <div class="tl-row"><button class="btn btn-dark" id="tlNext" type="button">${after ? `Next: ${esc(nextLabel(after, true))}` : "List done"}</button><button class="btn btn-outline-dark" id="tlOther" type="button">I scanned something else</button></div></div>`;
     cur.querySelector("#tlNext").onclick = () => { window.scrollTo({ top: 0, behavior: "smooth" }); if (after) document.getElementById("camBtn").click(); };
     cur.querySelector("#tlOther").onclick = () => {   // the expected chocolate still needs scanning: step the list back, and label this scan by hand
