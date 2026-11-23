@@ -21,6 +21,7 @@
   const MARGIN = 0.30;      // ...and this far ahead of the second guess
   const MIN_SHARP = 45;     // close-ups less sharp than this are skipped (the number can't be read)
   const MIN_SIZE = 0.13;    // chocolate smaller than this share of the view: ask to move closer
+  const MIN_OBJ = 0.75;     // 23 Nov, admin page only: the finder's own confidence below this = not a chocolate frame (see the quality gates in loop())
   const MIN_LIGHT = 50;      // model 6: chocolate's brighter parts darker than this → too dark to read (tests 1-3: all such scans wrong)
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
   const TILT_HINT_DEG = 25; // phone's own gyroscope: degrees away from lying flat before we nudge "hold it flatter" — a first guess, to refine once real sessions show what's helpful
@@ -370,11 +371,16 @@
       // model 6: too dark or a strong reflection → don't read this frame, say what to do (live on both pages)
       const tooDark = !!META.candidate && r.found && r.light && r.light.p90 < MIN_LIGHT;
       const glare = !!META.candidate && r.found && r.light && r.light.glare > MAX_GLARE;
-      if (r.found && (tooSmall || blurry || tooDark || glare)) {
+      // 23 Nov, ADMIN PAGE ONLY until exam list 2 confirms it: a frame the finder is unsure of is rejected like a blurry
+      // one, so a blank card, a pen or a hand never starts the clock. test-14's Nothing shots answered "zwhite" sat at a
+      // finder confidence of 0.56-0.74, every chocolate scan at 1.00; replayed on all six held-back sessions no chocolate
+      // answer changes and the replayed Nothing answers go 4 -> 1 of 10 (scorecard compare LIVE LIVE+objreject75).
+      const unsureFind = DEBUG && r.found && r.obj < MIN_OBJ;
+      if (r.found && (unsureFind || tooSmall || blurry || tooDark || glare)) {
         // seen, but not readable: don't count this frame, and say what to do
         lastSeen = t0; showMark(r, 0);
-        const reason = tooSmall ? "tooSmall" : tooDark ? "tooDark" : glare ? "glare" : "blurry";
-        $("#hint").textContent = tooSmall ? "Move a little closer" : tooDark ? "Too dark, find more light" : glare ? "Move slightly to avoid the reflection" : "Too blurry, hold steady";
+        const reason = unsureFind ? "unsure" : tooSmall ? "tooSmall" : tooDark ? "tooDark" : glare ? "glare" : "blurry";
+        $("#hint").textContent = unsureFind ? "Point the camera at one chocolate" : tooSmall ? "Move a little closer" : tooDark ? "Too dark, find more light" : glare ? "Move slightly to avoid the reflection" : "Too blurry, hold steady";
         if (DEBUG) {
           $("#hint").textContent += ` | sharp ${Math.round(r.sharp)} size ${Math.round(r.box.size * 100)}% obj ${r.obj.toFixed(2)}`;
           if (rejected.length < 400) rejected.push({ t: Math.round(t0 - scanStart), reason, sharp: Math.round(r.sharp), size: +r.box.size.toFixed(3),
@@ -410,7 +416,7 @@
             top: r.ranked.slice(0, 6).map(x => [x.key, +x.p.toFixed(4)]),
             qraw: r.qraw != null ? +r.qraw.toFixed(2) : null,   // 13 Nov: the which-way-up model's own confidence on the frames it actually ran on (null = rotation reused); qsure is the resolved value
             vec: r.print?.vec ? r.print.vec.map(v => +v.toFixed(3)) : null,   // 13 Nov: this frame's chocoprint, so a replay can rescore the live rule against a changed gallery (e.g. reinforcement on vs off)
-            u: Math.round(usableMs) });   // 17 Nov: the usable-frame clock at this frame, so the replay can use the phone's own clock
+            u: Math.round(usableMs), pf: r.pairFlip ? 1 : 0 });   // pf (23 Nov): the 6/9 pair check turned this frame over   // 17 Nov: the usable-frame clock at this frame, so the replay can use the phone's own clock
         }
         const holdMs = META.holdMs ?? HOLD_MS;   // model 6: 0.4 s (replay: 3 frames already gave 0 wrong)
         held = held.filter((f, i) => t0 - f.t <= holdMs * 1.5 || i >= held.length - 3);   // sliding window (always at least the last 3 frames)

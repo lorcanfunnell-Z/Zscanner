@@ -205,7 +205,7 @@ window.Recognizer = (() => {
     grab(source, x, y, side).dispose();
     snapCtx.drawImage(canvas, 0, 0);   // keep the standard close-up (whole chocolate, as seen) for the test log and gallery
     const sharp = sharpness(), lit = light(); lap("crop + sharpness");
-    let pid, psh, pmk, rot = 0, qsure = 1, qraw = null, resolvedPrint = null;
+    let pid, psh, pmk, rot = 0, qsure = 1, qraw = null, resolvedPrint = null, pairT0 = 0, pairN0 = 0, pairFlip = false;
     if (!quarter) {
       [pid, psh, pmk] = readAt(source, x, y, side, 0);
       if (opts.track) prev = { t: performance.now(), dur: performance.now() - now, fin: { obj, cx, cy, bs, looks, bs1, cx1, cy1 } };   // a model folder without a quarter model: still worth reusing the box
@@ -219,6 +219,7 @@ window.Recognizer = (() => {
       // chocoprint named the true chocolate at the other rotation. So when the last frame's match was weak, the
       // quarter model runs again and the chocoprint judges the remembered rotation against the fresh one and its
       // opposite, instead of one early frame deciding the whole scan.
+      pairT0 = recent && prev && prev.pairT != null ? prev.pairT : 0; pairN0 = recent && prev && prev.pairN ? prev.pairN : 0;   // the 6/9 shell tally so far this scan, and its frame count (see the pair check below)
       const weak = recent && prev && prev.psim != null && prev.psim < 0.9;
       let qorder;
       if (recent && prev.q != null && de < 12 && prev.qsure >= 0.8 && !weak) { qorder = [prev.q]; qsure = prev.qsure; }   // same way up as a moment ago
@@ -249,7 +250,31 @@ window.Recognizer = (() => {
     }
     let ranked = combine(pid, psh, pmk), print = null; const m4top = ranked[0].key;
     if (printer) {
-      const { sims, v } = resolvedPrint || computePrint(source, x, y, side, rot); lap("chocoprint");
+      let { sims, v } = resolvedPrint || computePrint(source, x, y, side, rot); lap("chocoprint");
+      // 6/9 pair check (23 Nov, test-14). A 9 turned over IS a 6, so the chocoprint matches a turned-over 9 to the
+      // gallery's 6 as strongly (0.96-0.98) as an upright 9 to its 9, and the which-way-up model turned the fresh N°9
+      // over on 4 of 6 close-ups (it learned the pair from drawings only). Match strength cannot choose the rotation
+      // here; the shell can: N°6 is dark, N°9 milk, and the reader named the right one on all 20 held-back 6/9 scans
+      // when counted over the WHOLE scan (a single frame can be wrong: test-14 scan 116 read milk on 19 of 22 frames).
+      // So when the top mark is 6 or 9 and the partner matches nearly as well turned over (within 0.1), the shell
+      // tally decides which way up it is. Costs one extra chocoprint, only on frames whose top is 6 or 9.
+      // LIVE CAMERA ONLY, and only once three frames have voted: the single-photo check (tools/photo_check.js, 23 Nov)
+      // showed one frame's shell is not enough - on the saved camera pictures it read the fresh N°9 as dark and turned
+      // right 9s into 6s (wrong 19 -> 24). Replayed on the live traces of all six held-back sessions with the tally:
+      // right 191 -> 196, wrong 14 -> 13, "can't tell from this many scans" (experiments/pair69/pairflip_replay.py).
+      const pairT = pairT0 + (psh[meta.shells.indexOf("dark")] - psh[meta.shells.indexOf("milk")]), pairN = pairN0 + 1;
+      if (opts.track && prev) { prev.pairT = pairT; prev.pairN = pairN; }
+      if (quarter && opts.track && pairN >= 3) {
+        const top0 = Object.keys(sims).reduce((a, b) => sims[b] > sims[a] ? b : a);
+        if (top0 === "6" || top0 === "9") {
+          const other = top0 === "6" ? "9" : "6", flip = computePrint(source, x, y, side, rot + 180);
+          if (flip.sims[other] >= sims[top0] - 0.1 && (pairT > 0 ? "6" : "9") === other) {
+            ({ sims, v } = flip); rot += 180; pairFlip = true;
+            if (opts.track && prev && prev.q != null) prev.q = (prev.q + 2) % 4;   // remember the turned rotation, so the next frame starts from it
+          }
+          lap("6/9 pair check");
+        }
+      }
       const mx = Math.max(...Object.values(sims)), ex = {}; let zsum = 0;
       for (const [m, s2] of Object.entries(sims)) { ex[m] = Math.exp(20 * (s2 - mx)); zsum += ex[m]; }
       const pm = k => ex[k.startsWith("z") ? "z" : k] / zsum;
@@ -263,7 +288,7 @@ window.Recognizer = (() => {
         ranked = [{ key: print.mark, p: 0.9 }, ...ranked.map(r => ({ key: r.key, p: r.p * 0.1 }))];
       lap("gallery compare");
     }
-    return { found: true, obj, box, box1, looks, size1: bs1, sharp, light: lit, rot, qsure, qraw, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
+    return { found: true, obj, box, box1, looks, size1: bs1, sharp, light: lit, rot, qsure, qraw, pairFlip, print, m4top, ranked, shell: meta.shells[psh.indexOf(Math.max(...psh))], mark: meta.marks[pmk.indexOf(Math.max(...pmk))] };
   }
 
   // Like Face ID folding a good unlock back into its template: when a scan is answered at the highest confidence
