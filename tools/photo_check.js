@@ -24,7 +24,7 @@ function findFile(sess, kind, truth, n) {
   return hits.length === 1 ? hits[0] : null;
 }
 const items = []; let gi = 0;   // gi: the scan's position in the replay's order (sessions in order, scans in log order), to line up with liveOut below
-for (const s of sessions) for (const r of JSON.parse(fs.readFileSync(path.join(ROOT, "tests", s, "test-log.json"))).filter(r => r.truth && r.trace)) {
+for (const s of sessions) for (const r of JSON.parse(fs.readFileSync(path.join(ROOT, "tests", s, "test-log.json"))).filter(r => r.truth && r.truth !== "none" && r.trace)) {   // Nothing shots ("none") are scored separately by scorecard.py, not as chocolate scans
   for (const kind of ["closeup", "camera"]) items.push({ sess: s, n: r.n, truth: r.truth, kind, gi, file: findFile(s, kind, r.truth, r.n) });
   gi++;
 }

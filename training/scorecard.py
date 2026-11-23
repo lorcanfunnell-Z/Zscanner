@@ -104,6 +104,7 @@ def scorecard(sessions):
     if "test-6" in sessions and len(sessions) > 1:
         rest = [s for s in sessions if s != "test-6"]; print(row("pooled without test-6", pool(rest)))
         print(f"{'':22s} (test-6 deliberately included harder, angled shots - see CLAUDE.md; shown both ways, not dropped)")
+    nothing_table(sessions)
     print()
     print("What it takes to CLAIM an error rate at 95% confidence (rule of three: zero wrong answers in n answered scans):")
     for p in (0.01, 0.02):
@@ -123,6 +124,22 @@ def scorecard(sessions):
     print("  So the honest statement today is a range, not a number; the exam session (training/exam-session-brief.md) is what narrows it.")
 
 # ---------------------------------------------------------------- compare ----------------------------------------------------------------
+def nothing_table(sessions):
+    """The Nothing shots (truth "none", 13 Nov): a deliberate not-a-chocolate picture, where the right outcome is no answer and any
+    answer is wrong. Scored on the phone's own recorded type, separately from the chocolate scans above, so they move neither
+    the answer rate nor the wrong-per-100 figure."""
+    rows = [(s, tr.load_nothing(os.path.join(ROOT, "tests", s))) for s in sessions]
+    rows = [(s, r) for s, r in rows if r]
+    if not rows: return
+    print("\nNothing shots (not a chocolate: no answer is right, any answer is wrong) - scored separately:")
+    print(f"{'session':22s}{'shots':>6s}{'answered (wrong)':>18s}{'wrong per 100 shots (95% range)':>34s}")
+    tot_n = tot_a = 0
+    for s, r in rows:
+        n = len(r); a = sum(1 for e in r if e.get("type") == "answer"); tot_n += n; tot_a += a
+        lo, hi = wilson(a, n); print(f"{s:22s}{n:6d}{a:18d}{100 * a / n:14.1f} ({100 * lo:5.1f} - {100 * hi:5.1f})")
+    if len(rows) > 1:
+        lo, hi = wilson(tot_a, tot_n); print(f"{'pooled':22s}{tot_n:6d}{tot_a:18d}{100 * tot_a / tot_n:14.1f} ({100 * lo:5.1f} - {100 * hi:5.1f})")
+
 # A result set is a list of {"id", "truth", "said", "outcome"} with outcome in {"right", "wrong", "none"} (none = not answered).
 RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.STOP_WALL5, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = the wall-clock 5 s stop, live 13-17 Nov; E+forced5 was live 3-13 Nov; LIVE = 5 s of usable frames + 10 s ceiling since 17 Nov
               "E+A": {**tr.E, "scanmajority": 1}, "E+A2": {**tr.E, "printmajority": 1}, "E+B1": {**tr.E, "anglesteady": 30},

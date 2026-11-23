@@ -29,8 +29,13 @@ NEW_RULES = [("E + 5 s of usable frames, 10 s ceiling: not certain by then = no 
              ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
              ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45})]
 
-def load(session_dir):   # the scans a replay can use: labelled, with a trace
-    return [r for r in json.load(open(os.path.join(session_dir, "test-log.json"))) if r.get("truth") and r.get("trace")]
+def load(session_dir):   # the scans a replay can use: labelled with a chocolate, with a trace
+    # "none" (a deliberate Nothing shot, 13 Nov) is scored separately - see load_nothing - so it never counts as a
+    # chocolate scan the rule failed to answer, nor as a wrong answer among them
+    return [r for r in json.load(open(os.path.join(session_dir, "test-log.json"))) if r.get("truth") and r["truth"] != "none" and r.get("trace")]
+
+def load_nothing(session_dir):   # the Nothing shots: the right outcome is no answer, any answer is wrong
+    return [r for r in json.load(open(os.path.join(session_dir, "test-log.json"))) if r.get("truth") == "none"]
 
 def jsvote(keys):
     c = {}
