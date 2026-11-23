@@ -43,7 +43,7 @@ has been scored.
 ## How to run a sitting (75 to 100 scans, 30 to 45 minutes)
 
 - **Switch on Exam mode** in the admin page's Test log panel (added 13 Nov). It deals the whole exam for you: a
-  shuffled list of all 28 chocolates eleven times each, shown one at a time as "Scan next: N°13 (5 of 308)". The
+  shuffled list of all 28 chocolates twelve times each, shown one at a time as "Scan next: N°13 (5 of 336)". The
   truth is filled in from that list before you scan, right or wrong is worked out from the scanner's answer, and the
   scan is saved on its own; the only tap you ever need is "I scanned something else" when you picked up the wrong
   chocolate. This replaces tapping the truth after the answer, which is how the N°21/N°22 mis-tap happened. The list
@@ -68,7 +68,10 @@ has been scored.
   data in itself.
 - **Download the zip at the end of each sitting** and send it. One zip per sitting.
 
-Four sittings of about 77 scans cover all 28 chocolates 11 times (308 scans). Three sittings of about 100 also work.
+**The plan (Lorcan, 23 Nov): three sittings, each 112 chocolate scans (every chocolate 4 times, dealt by Exam mode) plus
+8 Nothing shots with Exam mode switched off at the end of the sitting: 336 chocolate scans and 24 Nothing shots in all.**
+Before the first sitting, tick Exam mode and tap "Start the exam list again from scan 1" twice, so the list dealt is
+the 336-long one (the page shows "1 of 336"). Four sittings of about 77 also work; the list keeps its place either way.
 
 **Chocolate age (decided 16 Nov):** the exam runs on fresh chocolates, all sittings within a day or two of each other.
 Aged chocolates are covered separately, after the exam: one ordinary 28-scan session on the old set (3-4 weeks old)
@@ -90,7 +93,7 @@ sitting, point the camera at about twenty things a gift recipient might plausibl
 - the table itself, the napkin alone, the laptop keyboard
 
 For a Nothing shot the right outcome is "no answer"; any answer counts as wrong. These scans are scored separately
-from the 308 and are the first evidence for a "this is not one of ours" message.
+from the 336 and are the first evidence for a "this is not one of ours" message.
 
 ## Does the exam test what clients run?
 
@@ -124,5 +127,5 @@ decision rule — fair-tested with the compare tool, not adopted by eye.
 
 ## Time
 
-About 308 scans at roughly 20 seconds each including labelling: about 1 hour 45 minutes of scanning in total, over three
+About 336 scans at roughly 20 seconds each including labelling: about 1 hour 55 minutes of scanning in total, over three
 or four sittings on different days or at different times of day. The ten-minute setup happens once.

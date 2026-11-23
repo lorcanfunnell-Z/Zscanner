@@ -61,12 +61,12 @@
   window.addEventListener("zbuild", e => showBuild(e.detail));
 
   // ---------- exam mode (13 Nov, see training/exam-session-brief.md) ----------
-  // The truth is entered BEFORE each scan, from a shuffled list the page deals: all 28 chocolates, 11 times each,
-  // 308 scans. Right or wrong is worked out from the scanner's answer and the scan is saved by itself; the only tap
+  // The truth is entered BEFORE each scan, from a shuffled list the page deals: all 28 chocolates, EXAM_EACH times
+  // each (12 since 23 Nov: Lorcan's plan is three sittings of 4 scans per chocolate plus 8 Nothing shots, 336 + 24). Right or wrong is worked out from the scanner's answer and the scan is saved by itself; the only tap
   // ever needed is "I scanned something else". This replaces tapping the truth after seeing the answer, which is how
   // the test-7 N°21/N°22 mis-tap happened, and it makes a predictable scanning order impossible. The list lives on
   // the phone, so a sitting can stop and the next one carries on where it left off.
-  const EXAM = "zscanner-exam-v1", EXAM_EACH = 11;
+  const EXAM = "zscanner-exam-v1", EXAM_EACH = 12;
   const getExam = () => { try { return JSON.parse(localStorage.getItem(EXAM)) || null; } catch { return null; } };
   const setExam = x => { try { localStorage.setItem(EXAM, JSON.stringify(x)); } catch {} };
   const examOn = () => panel.querySelector("#tlExam").checked;
@@ -82,7 +82,7 @@
   function showNext() {
     const nx = examNext(), p = panel.querySelector("#tlNext"), r = panel.querySelector("#tlExamReset");
     r.hidden = !examOn();
-    p.textContent = !examOn() ? "" : nx ? `Scan next: ${name(nx.key)}   (${nx.pos + 1} of ${nx.total})` : "Exam list finished - every chocolate scanned 11 times. Nothing shots next, or start the list again below.";
+    p.textContent = !examOn() ? "" : nx ? `Scan next: ${name(nx.key)}   (${nx.pos + 1} of ${nx.total})` : `Exam list finished - every chocolate scanned ${EXAM_EACH} times. Nothing shots next, or start the list again below.`;
   }
   panel.querySelector("#tlExam").onchange = showNext;
   let examArmed = false;
