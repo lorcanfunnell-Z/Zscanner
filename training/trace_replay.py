@@ -28,7 +28,15 @@ NEW_RULES = [("E + 5 s of usable frames, 10 s ceiling: not certain by then = no 
              ("E + B1: angles steady within 30°", {**E, "anglesteady": 30}),
              ("E + B2: angle matches the scan's main angle", {**E, "anglemain": 45}),
              ("E + A + B2", {**E, "scanmajority": 1, "anglemain": 45}),
-             ("LIVE + finder confidence >= 0.75 over the window (23 Nov lead: test-14's Nothing shots sat at 0.56-0.74, every chocolate scan at 1.0)", {**LIVE, "minobj": .75})]
+             ("LIVE + finder confidence >= 0.75 over the window (23 Nov lead: test-14's Nothing shots sat at 0.56-0.74, every chocolate scan at 1.0)", {**LIVE, "minobj": .75}),
+             # 23 Nov, two candidates fair-tested the same day (results in docs/HISTORY.md): the shell colour over the whole scan
+             # (test-14 scan 116, N°9 answered as 6 on a two-frame 'dark' window) and the finder's confidence as a quality gate
+             # rather than an answer gate (an unsure frame is dropped like a blurry one, so a blank card never starts the clock)
+             ("LIVE + shell vote over the whole scan must match", {**LIVE, "shellscan": 1}),
+             ("LIVE + answer's shell read in >= 60% of all held frames", {**LIVE, "shellshare": .6}),
+             ("LIVE + answer's shell read in >= 70% of all held frames", {**LIVE, "shellshare": .7}),
+             ("LIVE + frames with finder confidence < 0.75 rejected like blurry ones", {**LIVE, "objreject": .75}),
+             ("LIVE + frames with finder confidence < 0.80 rejected like blurry ones", {**LIVE, "objreject": .8})]
 
 def load(session_dir):   # the scans a replay can use: labelled with a chocolate, with a trace
     # "none" (a deliberate Nothing shot, 13 Nov) is scored separately - see load_nothing - so it never counts as a
@@ -55,8 +63,11 @@ def run(rule, K=3, detail=False, L=None):
     for r in rows:
         held, said, at, seen = [], None, None, None
         tu, prev_t = 0, None   # the usable-frame clock: the phone's own value when logged (u, since scanner-v60), else rebuilt from the gaps between held frames
-        for f in r["trace"]:
-            tu = f["u"] if f.get("u") is not None else (tu + min(f["t"] - prev_t, 400) if prev_t is not None else 0); prev_t = f["t"]
+        frames = r["trace"]
+        if rule.get("objreject"):                               # 23 Nov: a frame the finder was unsure of is thrown out like a blurry one - it never joins the hold, so the phone's logged clock no longer applies and the usable clock is rebuilt below from the kept frames' gaps (test-14's Nothing shots sat at 0.5-0.74); a frame logged without obj (test-4..7) is kept as it was
+            frames = [f for f in frames if f.get("obj") is None or f["obj"] >= rule["objreject"]]
+        for f in frames:
+            tu = f["u"] if f.get("u") is not None and not rule.get("objreject") else (tu + min(f["t"] - prev_t, 400) if prev_t is not None else 0); prev_t = f["t"]
             held.append(f); win = [h for i, h in enumerate(held) if f["t"] - h["t"] <= 600 or i >= len(held) - 3]   # as the phone: last 0.6 s, always at least 3 frames
             if f["t"] - held[0]["t"] < 400: continue
             if len(win) < 3: continue
@@ -93,7 +104,15 @@ def run(rule, K=3, detail=False, L=None):
                 shell_ok = META["shellOf"].get(top) == "milkwhite" or vote("shell") == META["shellOf"].get(top)
                 ok = ok and shell_ok
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
-            forced = rule.get("deadline") and f["t"] >= rule["deadline"] and len(win) >= 3   # 3-13 Nov: hard cutoff, answer with the current top guess
+            # 23 Nov: the shell colour over EVERY held frame of the scan, not just the 0.6 s window. Why: on test-14 scan 116 the
+            # reader read N°9's shell as milk on 19 of 22 frames and dark on the last two, and those two were the whole window
+            # when the chocoprint settled on 6 (a dark chocolate) - so the window's shell vote let a wrong answer through.
+            # N°20 (milkwhite) is skipped exactly as the window check above skips it.
+            if rule.get("shellscan"):                           # the whole-scan shell vote must match the answer's shell
+                ok = ok and (META["shellOf"].get(top) == "milkwhite" or jsvote([h.get("shell") for h in held]) == META["shellOf"].get(top))
+            if rule.get("shellshare"):                          # the answer's shell must have been read in at least this share of all held frames
+                ok = ok and (META["shellOf"].get(top) == "milkwhite" or sum(1 for h in held if h.get("shell") == META["shellOf"].get(top)) / len(held) >= rule["shellshare"])
+            forced =rule.get("deadline") and f["t"] >= rule["deadline"] and len(win) >= 3   # 3-13 Nov: hard cutoff, answer with the current top guess
             if (ok and tp >= .5 and tp - sp >= .2) or forced:
                 said = top; at = f["t"] - held[0]["t"]
                 seen = {"top": top, "tp": tp, "sp": sp, "win": list(win), "held": list(held), "agree": bool(agree), "forced": bool(forced)}

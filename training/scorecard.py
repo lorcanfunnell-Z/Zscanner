@@ -157,7 +157,9 @@ def nothing_table(sessions, rules=None):
 RULE_NAMES = {"LIVE": tr.LIVE, "E": tr.E, "E+stop5": tr.STOP_WALL5, "E+forced5": {**tr.E, "deadline": 5000},   # E+stop5 = the wall-clock 5 s stop, live 13-17 Nov; E+forced5 was live 3-13 Nov; LIVE = 5 s of usable frames + 10 s ceiling since 17 Nov
               "E+A": {**tr.E, "scanmajority": 1}, "E+A2": {**tr.E, "printmajority": 1}, "E+B1": {**tr.E, "anglesteady": 30},
               "E+B2": {**tr.E, "anglemain": 45}, "E+A+B2": {**tr.E, "scanmajority": 1, "anglemain": 45}, "E+deadline": {**tr.E, "deadline": 5000},
-              "LIVE+obj75": {**tr.LIVE, "minobj": .75}, "LIVE+obj80": {**tr.LIVE, "minobj": .8}}   # 23 Nov lead: the finder-confidence gate against Nothing shots (trace_replay "minobj")
+              "LIVE+obj75": {**tr.LIVE, "minobj": .75}, "LIVE+obj80": {**tr.LIVE, "minobj": .8},   # 23 Nov lead: the finder-confidence gate against Nothing shots (trace_replay "minobj")
+              "LIVE+shellscan": {**tr.LIVE, "shellscan": 1}, "LIVE+shell60": {**tr.LIVE, "shellshare": .6}, "LIVE+shell70": {**tr.LIVE, "shellshare": .7},   # 23 Nov: the shell colour over the whole scan, not the 0.6 s window (test-14 scan 116, N°9 answered as 6; trace_replay "shellscan"/"shellshare")
+              "LIVE+objreject75": {**tr.LIVE, "objreject": .75}, "LIVE+objreject80": {**tr.LIVE, "objreject": .8}}   # 23 Nov: the finder-confidence line as a QUALITY gate - an unsure frame is dropped like a blurry one, the usable clock pauses (trace_replay "objreject")
 
 def outcome(truth, said):
     return "none" if not said else ("right" if said == truth else "wrong")
