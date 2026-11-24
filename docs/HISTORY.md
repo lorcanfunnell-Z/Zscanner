@@ -308,3 +308,13 @@ the camera's angle, not the mould. And `number designs/mark_9.png` turned over o
 dark pixels), swirl included. Nothing in the shape or the mark can tell them apart; the shell colour remains the
 tie-breaker (the v65 pair check).
 
+**Correction, same day (Lorcan re-explained Julien's idea):** the slope is not the camera's angle. Julien's measured 3D
+model has three vertical sides and one sloped one (width at the base 26.7 mm front to back, top face 18.9 mm, all the
+loss on one side; left-right unchanged at 25.6 mm), so a single sloped face is part of the mould. The test-14 pictures
+looked like perspective only because every chocolate was placed with the slope away from the camera person. On all 24
+saved 6 and 9 close-ups (test-4 to test-14, two batches) the slope is at the top and the number upright: the 6's stem
+leaves the ring on the slope side, the 9's tail on the far side - Julien's description. The relation is fixed per
+chocolate: every N°10 (4 of 4 in test-14) lies upside down under its slope, the phone's rotation logged about 0, so
+the gallery holds N°10 that way too. Lead (not built): normalise every crop to slope-at-top instead of the which-way-up
+model (trained on drawings, which have no slope). Needed first: a slope detector and real photos with chocolates turned
+each way, which the reference round can supply.
