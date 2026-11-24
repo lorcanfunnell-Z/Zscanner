@@ -333,3 +333,17 @@ test-13 (reader 23/25) and 18/26 on test-6 (reader 26/26). Lead (not built): red
 vote - the shell fits if either the reader or the redness says so - replayed with the close-up's redness as a proxy,
 and logged per frame on the phone so the next session can test it properly; and the reference round's photos as shell
 training data so the reader learns the fresh milk pieces.
+
+**How the shell is read, and what could change (24 Nov).** The reader is one network with three outputs (chocolate,
+shell, mark) on a shared backbone, trained on generated images plus non-held test scans with brightness x0.55-1.45,
+gamma up to 2.2 and contrast x0.75-1.6 (training/lib/view.js jitter). That jitter makes a dark chocolate look milk and the
+reverse, and every chocolate's shell is fixed, so the cheapest way for the network to answer "shell" is to recognise
+the number and look its shell up - the echo measured above. Number-blind colour measures on the held-back close-ups
+(ranking score inside each session / pooled across sessions): red 0.81-1.00 / 0.85, brightness 0.75-0.98 / 0.78;
+hue, saturation, warmth and R/G are near chance pooled (0.49-0.66). Milk versus dark is lightness, and lightness moves
+with the camera's automatic exposure (pale card versus dark wood) - removing the background's colour cast or dividing by
+its brightness does not help (0.85 / 0.76 pooled). Options, cheapest first: (1) the fresh reference round as reader
+training photos, so the echo itself becomes right for the fresh pieces; (2) redness as a second, number-blind vote that
+only speaks when far from the line, the shell passing if either vote fits, logged per frame on the admin page first;
+(3) a separate small colour-only shell model trained on real photos with the number blurred away and milder brightness
+jitter, judged leave-one-session-out against the reader's echo - the real fix if exposure can be learnt from context.
