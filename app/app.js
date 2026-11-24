@@ -334,7 +334,7 @@
     viewer.classList.add("locked");
     setTimeout(() => { stopCamera(); render(key, { scanned: true, vec, reinforcedAs }); setStatus(`Found: ${esc(label(key))}`); }, 250);
   }
-  function resetHold(t) { held = []; holdStart = t; firstClearSeen = 0; usableMs = 0; lastUsable = 0; settle = []; }
+  function resetHold(t) { held = []; scanAll = []; holdStart = t; firstClearSeen = 0; usableMs = 0; lastUsable = 0; settle = []; }   // scanAll too (24 Nov): the late answer must only weigh frames of what is under the camera now, like the 5 s clock
   // The window's average ranking - what the decision reads, and what the chips show when the clock runs out on a frame
   // the gates rejected. Keys come from every frame, not just the first: a custom (admin-added) chocolate's print match can
   // come and go frame to frame, so held[0] alone might not have every key that appears later - missing values default to 0.
