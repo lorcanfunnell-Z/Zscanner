@@ -287,3 +287,24 @@ Read this first, then `HANDOVER.md` (how the code fits together). History and pl
 - Code Book (all code on one page): https://claude.ai/artifact/BwSpbzVvw6ZZaXw5Dw7Wg4 — rebuild instructions are in the Chocolate Scanner project doc `zscanner-code-book-builder.md`
 - Hooks plan: https://claude.ai/artifact/5u9kUajXtceKodLSuR5Fb1
 - Hook proposal: "zScanner: Turning Recipients into Customers" https://claude.ai/artifact/CxboHRQnMNhXry4fWm8VWo
+
+## 24 Nov 2026 - the late answer, and Julien's 6/9 idea
+
+Julien retested the scanner (no zip sent): much better on shadows and angles; the "not certain" chips usually held the
+truth first. Of the 58 held-back not-certain scans under LIVE, the whole scan's top chocolate was right on 37. A "late
+answer" at the stop (chocoprint share over the whole scan >= 0.6, lead >= 0.3, whole-scan shell fits) was chosen on
+test-4..13 (sweep of share 0.4-0.7 by lead 0.1-0.4: lead 0.1 let a wrong one through, shares 0.4-0.6 tied, 0.6 kept as
+the cautious end) and confirmed on test-14 (3 more right, 0 wrong). `scorecard.py compare LIVE LIVE+late`: right 191 ->
+196, wrong 14 -> 14, Nothing 4/10 -> 4/10, verdict "can't tell from this many scans". Share 0.4 would give 5 on test-14,
+chosen by looking at it: a lead for the next session only. In the app as scanner-v66 (`latePick` in app/app.js, a
+whole-scan frame list since the hold window is only the last 0.6 s); the browser smoke test answers before the stop, so
+the late path is untested on a phone. On test-14 eight more not-certain scans had the chocoprint 68-100% sure of the
+right milk chocolate (11, 14, 22, 24) but the reader read the shell as dark; the same shell check stops the three 9 -> 6
+scans, so the fix is the reader's shell on fresh milk pieces (shell training photos from the reference round).
+
+Julien's idea for 6/9 - read which way up from the side of the chocolate whose edge slopes down: on test-14 close-ups of
+chocolates placed upside down (N°10, N°0) the bright sloped face is still at the top of the picture, so it comes from
+the camera's angle, not the mould. And `number designs/mark_9.png` turned over overlaps `mark_6.png` at 97% (IoU of the
+dark pixels), swirl included. Nothing in the shape or the mark can tell them apart; the shell colour remains the
+tie-breaker (the v65 pair check).
+
