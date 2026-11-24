@@ -2,7 +2,7 @@
 // Bump VERSION whenever a page/code file changes so phones pick up the new version.
 // Bump MODEL_VERSION only when a model file changes: models are big (several MB) and are loaded from the phone
 // after the first visit (cache first), so a second visit doesn't download them again.
-const VERSION = "scanner-v65";   // 23 Nov: the 6/9 pair check (live camera, after three frames, the shell tally chooses which way up when 6 and 9 tie) and, on the admin page only, frames the finder is unsure of rejected like blurry ones
+const VERSION = "scanner-v66";   // 24 Nov: the late answer - at the 5 s stop, the whole scan's likeliest chocolate is answered when the chocoprint named it on >= 60% of the frames, it leads by >= 0.3 and the shell fits; otherwise "not certain" and the chips as before
 const MODEL_VERSION = "models-6.1.4";   // 13 Nov: the gallery is downloaded as 16-bit gallery.bin + gallery.pack.json (same 1409 references)
 // choc3d/ (the 3D result-card mesh + materials, 3 Nov) treated the same as a model: large, static once published,
 // only ever needed after a chocolate is identified - cache once and keep, rather than refetching every visit.

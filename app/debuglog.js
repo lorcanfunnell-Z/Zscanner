@@ -159,7 +159,7 @@
   window.addEventListener("zscan", async e => {
     const d = e.detail;
     const entry = { n: ++n, at: new Date().toISOString(), note: getNote(), type: d.type, guess: d.guess, avgTop3: d.avgTop3, nowTop3: d.nowTop3,
-      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced, tiltPermission: d.tiltPermission, loadMs: d.loadMs, build: d.build,
+      shell: d.shell, mark: d.mark, frames: d.frames, holdMs: d.holdMs, ms: d.ms, seenMs: d.seenMs, clearMs: d.clearMs, forced: d.forced, late: d.late || false, tiltPermission: d.tiltPermission, loadMs: d.loadMs, build: d.build,
       trace: d.trace || [], rejected: d.rejected || [], crop: d.crop, frame: d.frame, truth: null, correct: null };
     const nx = examNext();
     if (nx) {   // exam mode: the truth was decided before the scan - save at once, no tap needed

@@ -26,6 +26,10 @@
   const MAX_GLARE = 0.03;    // model 6: more than 3% blown-out pixels on the chocolate → a reflection (never reached in tests 1-3)
   const TILT_HINT_DEG = 25; // phone's own gyroscope: degrees away from lying flat before we nudge "hold it flatter" — a first guess, to refine once real sessions show what's helpful
   const IDK_AFTER_MS = 2000; // after the hold, this long without an answer → say what would help (live on both pages: model6's meta.json sets candidate:true for each)
+  // 24 Nov, the late answer (see latePick): at the stop, the whole scan's likeliest chocolate is answered when the
+  // chocoprint named it on at least this share of the scan's frames, it leads the runner-up by at least this much and
+  // the shell colour over the whole scan fits; otherwise "not certain" and the chips as before.
+  const LATE_SHARE = 0.6, LATE_GAP = 0.3;
   const HARD_DEADLINE_MS = 5000; // the budget of USABLE frames a scan gets before it stops without answering ("not certain", the likeliest three offered - see loop()). 3-13 Nov: a wall-clock 5 s, past which the current best guess was answered (N20/N23 had run 42-104 s before that); 13-17 Nov: wall-clock, no answer past it; since 17 Nov (Lorcan's rule): usable frames only - a blurry or dark stretch pauses this clock instead of eating it. Replayed on 139 held-back scans: one more right answer, nothing new wrong
   const USABLE_GAP_MS = 400;     // a gap between usable frames longer than this means frames were being rejected in between: only this much of it counts as usable time
   const WAIT_CEILING_MS = 10000; // whatever the frames are doing, no scan runs longer than this from the first usable frame. Before 17 Nov the deadline was only checked when a frame passed the quality gates, so a scan whose frames kept failing them ran on (test-13 N°23: 12 s)
@@ -222,7 +226,7 @@
     if (!(await ready)) { stopCamera("Scan a chocolate"); return; }   // the models could not load: the status line says what to do instead
     if (!stream) return;                                               // the camera was closed while the models were still loading
     setStatus(""); $("#hint").textContent = "Point the camera at one chocolate";
-    held = []; settle = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; usableMs = 0; lastUsable = 0; trace = []; rejected = []; lastScan = null; fixing = false;
+    held = []; scanAll = []; settle = []; holdStart = 0; lastSeen = 0; scanStart = performance.now(); lastInfo = null; firstSeen = 0; firstClearSeen = 0; usableMs = 0; lastUsable = 0; trace = []; rejected = []; lastScan = null; fixing = false;
     scanning = true;
     loop();
     // client page only, unchanged: asked after the camera is streaming so no second prompt can delay the scan starting -
@@ -271,6 +275,7 @@
     BUILD.version = (t.match(/const VERSION = "([^"]+)"/) || [])[1] || "unknown"; BUILD.models = (t.match(/const MODEL_VERSION = "([^"]+)"/) || [])[1] || "unknown";
     window.dispatchEvent(new CustomEvent("zbuild", { detail: { ...BUILD } }));
   }).catch(() => { BUILD.version = BUILD.models = "unknown"; window.dispatchEvent(new CustomEvent("zbuild", { detail: { ...BUILD } })); });
+  let scanAll = [];                         // 24 Nov: every frame held this scan (the window above is only the last ~0.6 s), for the late answer
   let held = [], holdStart = 0;            // frames collected during the current hold
   let settle = [];                         // frames seen before the hold starts (settle gate, 13 Nov)
   let scanStart = 0, lastInfo = null;       // for the debug test log: the numbers behind the latest decision
@@ -342,7 +347,31 @@
   // least three frames held; checked on every frame, rejected ones included, so a scan can no longer run on past the
   // deadline just because its frames keep failing the gates
   const outOfTime = t0 => held.length >= 3 && !!firstClearSeen && (usableMs >= HARD_DEADLINE_MS || t0 - firstClearSeen >= WAIT_CEILING_MS);
-  function giveUp(r) { if (lastInfo) lastInfo.forced = false; unsure(rankHeld().slice(0, 3).map(([k]) => k), r.print?.vec); }
+  // 24 Nov, the late answer. When the clock runs out, look at the whole scan once more (every held frame, not just the
+  // last 0.6 s): answer its likeliest chocolate if the chocoprint named it on at least LATE_SHARE of those frames, it
+  // leads the runner-up by at least LATE_GAP and the shell colour over the whole scan fits (N°20 skipped, as in rule E).
+  // Why: on the "not certain" scans the truth was the first chip about two times in three, but answering it blindly
+  // (the 3-13 Nov forced guess) made 15 wrong instead of 7. Replayed on the six held-back sessions
+  // (training/scorecard.py compare LIVE LIVE+late): right 191 -> 196, wrong 14 -> 14, Nothing shots unchanged,
+  // "can't tell from this many scans"; the settings were chosen on test-4..13 and held on test-14 (3 more right, 0 wrong).
+  function latePick() {
+    if (scanAll.length < 3) return null;
+    const avg = {}; scanAll.forEach(f => Object.entries(f.p).forEach(([k, p]) => avg[k] = (avg[k] || 0) + p / scanAll.length));
+    const ranked = Object.entries(avg).sort((a, b) => b[1] - a[1]);
+    const [top, p1] = ranked[0] || [], p2 = ranked[1] ? ranked[1][1] : 0;
+    if (!top || !C[top] || C[top].custom) return null;
+    const share = scanAll.filter(f => f.pmark === zm(top)).length / scanAll.length;
+    const c = {}; scanAll.forEach(f => { if (f.shell) c[f.shell] = (c[f.shell] || 0) + 1; });
+    const shellAll = Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const shellOk = META.shellOf[top] === "milkwhite" || shellAll === META.shellOf[top];
+    return share >= LATE_SHARE && p1 - p2 >= LATE_GAP && shellOk ? top : null;
+  }
+  function giveUp(r) {
+    if (lastInfo) lastInfo.forced = false;
+    const late = latePick();
+    if (late) { if (lastInfo) lastInfo.late = true; answer(late, r.print?.vec, null); return; }   // never reinforces: not a top-confidence answer
+    unsure(rankHeld().slice(0, 3).map(([k]) => k), r.print?.vec);
+  }
   // Settle gate (13 Nov). Nothing starts - no hold, no 5 s clock - until the view has stayed roughly still over whatever
   // the finder found: the last three frames, spanning at least SETTLE_SPAN_MS, within SETTLE_MOVE of each other, or
   // found continuously for SETTLE_MAX_MS with no jump. Why: the finder says "found" far too easily (an empty desk
@@ -406,6 +435,7 @@
         } else holdStart = t0;
         held.push({ t: t0, cx: r.box.cx, cy: r.box.cy, size: r.box.size, sharp: r.sharp, qsure: r.qsure ?? 1, psim: r.print?.sim ?? 1,
           p: Object.fromEntries(r.ranked.map(x => [x.key, x.p])), shell: r.shell, mark: r.mark, m4top: r.m4top, pmark: r.print?.mark, tilt: tiltAngle != null ? Math.round(tiltAngle) : null });
+        if (scanAll.length < 400) scanAll.push(held[held.length - 1]);
         if (!firstClearSeen) firstClearSeen = t0;   // live on both pages - this frame already cleared the quality gate above, so the deadline clock starts counting from here
         usableMs += lastUsable ? Math.min(t0 - lastUsable, USABLE_GAP_MS) : 0; lastUsable = t0;   // the usable-frame clock
         if (DEBUG) {
