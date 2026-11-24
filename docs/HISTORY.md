@@ -318,3 +318,18 @@ chocolate: every N°10 (4 of 4 in test-14) lies upside down under its slope, the
 the gallery holds N°10 that way too. Lead (not built): normalise every crop to slope-at-top instead of the which-way-up
 model (trained on drawings, which have no slope). Needed first: a slope detector and real photos with chocolates turned
 each way, which the reference round can supply.
+
+**Why fresh milk chocolates read "dark" (24 Nov, Lorcan's question).** Not the light as such: in test-14 N°24, 14, 11,
+22 and 16 were read dark on most frames (24: 5 right of 138) while N°0, 9, 4 and 7 under the same light were read milk
+on almost every frame. The reader's shell output mostly repeats its own number guess: it matches the shell of the
+reader's top chocolate on 90-99% of frames in every held-back session, and 380 of test-14's 547 wrong shell reads are
+exactly that echo (a fresh 14 read as a dark chocolate's number comes out "dark"). So the shell check has never been an
+independent colour check. A plain colour measure that cannot see the number - the median redness of the chocolate's
+face in the saved close-up - separates milk from dark perfectly inside test-5, 7, 13 and 14 (ranking score 1.00), but
+its dividing line moves with the light (dark faces 16-32 in test-13, 23-53 in test-14; sun in test-12 lifts everything
+to 138-245), and a crude colour model judged leave-one-session-out gets only 196 of 309 close-ups. A line at 55 (chosen
+by looking at all sessions, so not a fair result) gives 115/115 on test-14 against the reader's 98/115, but 20/25 on
+test-13 (reader 23/25) and 18/26 on test-6 (reader 26/26). Lead (not built): redness as a second, number-blind shell
+vote - the shell fits if either the reader or the redness says so - replayed with the close-up's redness as a proxy,
+and logged per frame on the phone so the next session can test it properly; and the reference round's photos as shell
+training data so the reader learns the fresh milk pieces.
