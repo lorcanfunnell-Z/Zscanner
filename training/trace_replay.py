@@ -36,7 +36,8 @@ NEW_RULES = [("E + 5 s of usable frames, 10 s ceiling: not certain by then = no 
              ("LIVE + answer's shell read in >= 60% of all held frames", {**LIVE, "shellshare": .6}),
              ("LIVE + answer's shell read in >= 70% of all held frames", {**LIVE, "shellshare": .7}),
              ("LIVE + frames with finder confidence < 0.75 rejected like blurry ones", {**LIVE, "objreject": .75}),
-             ("LIVE + frames with finder confidence < 0.80 rejected like blurry ones", {**LIVE, "objreject": .8})]
+             ("LIVE + frames with finder confidence < 0.80 rejected like blurry ones", {**LIVE, "objreject": .8}),
+             ("LIVE + late answer at the stop (chocoprint share >= 0.6, gap >= 0.3, whole-scan shell fits)", {**LIVE, "late": .6})]
 
 def load(session_dir):   # the scans a replay can use: labelled with a chocolate, with a trace
     # "none" (a deliberate Nothing shot, 13 Nov) is scored separately - see load_nothing - so it never counts as a
@@ -55,6 +56,21 @@ def jsvote(keys):
 
 def adiff(a, b):                                        # smallest gap between two angles, in degrees
     d = abs((a - b) % 360); return min(d, 360 - d)
+
+def late_pick(held, rule):
+    # 24 Nov, the "late answer": when the stop comes with no certain answer, the whole scan is looked at once more. If the
+    # chocoprint named the scan's likeliest chocolate on most held frames, the likeliest is well clear of the runner-up and
+    # the shell colour over the whole scan fits, that chocolate is the answer; otherwise "not certain" and the chips as now.
+    # Why: on the not-certain scans the truth was the first chip about two times in three, and these three signals together
+    # picked out only right ones on test-4..13 (chosen there) and on test-14 (confirmation).
+    if not held: return None
+    avg = Counter()
+    for h in held:
+        for k, p in h["top"]: avg[k] += p / len(held)
+    (top, p1), *rest = avg.most_common(2) + [("", 0)]
+    pshare = sum(1 for h in held if h.get("pmark") == zm(top)) / len(held)
+    sfit = META["shellOf"].get(top) == "milkwhite" or jsvote([h.get("shell") for h in held]) == META["shellOf"].get(top)
+    return top if pshare >= rule["late"] and p1 - rest[0][1] >= rule.get("lategap", .3) and sfit else None
 
 def run(rule, K=3, detail=False, L=None):
     # detail=True returns (truth, said, at) per scan; detail="full" adds what the rule saw at the moment it answered
@@ -121,12 +137,18 @@ def run(rule, K=3, detail=False, L=None):
             # the same cutoff as "deadline" above, but counted as not answered. As with "deadline", the clock here runs
             # from the first held frame of the trace; the phone's restarts if the chocolate jumps (resetHold), a small
             # difference the replay has never modelled.
-            if rule.get("stop") and f["t"] >= rule["stop"] and len(win) >= 3: break
+            if rule.get("stop") and f["t"] >= rule["stop"] and len(win) >= 3:
+                if rule.get("late") and late_pick(held, rule): said = late_pick(held, rule); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
+                break
             # 17 Nov: the live stop - 5 s of usable frames, or 10 s on the wall clock. The phone checks both on every frame,
             # rejected ones included; the trace holds only usable frames, so this replay stops at the next one - the same
             # outcome (no answer can come from a rejected frame), only the chips may differ by a frame
-            if rule.get("stop_usable") and tu >= rule["stop_usable"] and len(win) >= 3: break
-            if rule.get("stop_wall") and f["t"] >= rule["stop_wall"] and len(win) >= 3: break
+            if rule.get("stop_usable") and tu >= rule["stop_usable"] and len(win) >= 3:
+                if rule.get("late") and late_pick(held, rule): said = late_pick(held, rule); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
+                break
+            if rule.get("stop_wall") and f["t"] >= rule["stop_wall"] and len(win) >= 3:
+                if rule.get("late") and late_pick(held, rule): said = late_pick(held, rule); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
+                break
         out.append((r["truth"], said, at if said else None))
         full.append({"truth": r["truth"], "said": said, "at": at if said else None, "scan": r, "held": list(held), "seen": seen})
     if detail == "full": return full
