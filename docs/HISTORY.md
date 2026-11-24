@@ -347,3 +347,13 @@ training photos, so the echo itself becomes right for the fresh pieces; (2) redn
 only speaks when far from the line, the shell passing if either vote fits, logged per frame on the admin page first;
 (3) a separate small colour-only shell model trained on real photos with the number blurred away and milder brightness
 jitter, judged leave-one-session-out against the reader's echo - the real fix if exposure can be learnt from context.
+
+**Which checks are independent (24 Nov audit, Lorcan's point that some checks may be short-cut).** Over 5,567 frames
+of the six held-back sessions: the reader's mark output (one digit / two / Z) repeats the reader's own number guess on
+95% of frames (1,089 of 1,253 wrong mark reads are that echo), like the shell; the rule does not use the mark (logic
+"shell"), so it only feeds the combined score. The reader's number and the chocoprint ARE independent: both wrong on
+1,944 frames against 1,951 expected by chance, the same wrong chocolate on only 261 of the reader's 3,941 wrong frames.
+Under LIVE, 125 answers came with both agreeing (12 wrong) and 80 on the 99% combined score alone (2 wrong): the wrong
+answers come through agreement, on lookalike pairs where both models make the same mistake (13/19), not through a
+shortcut. Also short-cut by its training: the which-way-up model (drawings only, no slope) and the finder's confidence
+(1.00 on every chocolate, 0.99 on an empty desk).
