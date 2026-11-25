@@ -22,7 +22,7 @@ function model() {
   m.compile({ optimizer: tf.train.adam(1e-3), loss: "categoricalCrossentropy", metrics: ["accuracy"] });
   return m;
 }
-const aug = k => ({ angle: k * 90 + between(-20, 20) || 0.1, light: between(.6, 1.4), sat: between(.8, 1.2), hue: between(-6, 6), ...(rnd() < .3 ? { blur: between(.3, 1.2) } : {}) });
+const aug = k => ({ angle: k * 90 + between(-20, 20) || 0.1, light: between(.6, 1.4), sat: between(.8, 1.2), hue: between(-6, 6), ...(rnd() < .3 ? { blur: between(.3, 1.2) } : {}), ...(rnd() < .8 ? { lowres: Math.round(between(90, 170)) } : {}) });   // 25 Nov run 2: the live close-ups are a ~130 px camera crop blown up to 224, far softer than the training photos (run 1: 46% on held-back)
 async function evalHeld(m, label = "") {
   const tot = [0, 0], by69 = [0, 0], perK = [0, 0, 0, 0];
   for (let i = 0; i < heldFiles.length; i += 16) {

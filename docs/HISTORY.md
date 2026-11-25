@@ -357,3 +357,26 @@ Under LIVE, 125 answers came with both agreeing (12 wrong) and 80 on the 99% com
 answers come through agreement, on lookalike pairs where both models make the same mistake (13/19), not through a
 shortcut. Also short-cut by its training: the which-way-up model (drawings only, no slope) and the finder's confidence
 (1.00 on every chocolate, 0.99 on an empty desk).
+
+## 25 Nov 2026 - the finder, colour and slope day (before Lorcan's videos and turned photos)
+
+- **Finder:** `training/nothing_eval.js` measures what the trainer's verdict never did - "nothing" said on empty
+  views. Today's finder: held-back chocolate frames found 266/266 (confidence 1.00 at the 10th percentile), test-14's
+  Nothing shots said nothing 4/10 at the 0.75 line. `tools/video_frames.py` (2 frames/s, centre square, Nothing clips
+  filed into training-photos-wide/none, `--hold` keeps a clip for testing) and `tools/video_label.js` (mixed clips
+  boxed by today's finder at >= 0.97, unsure frames dropped) are ready and were tested on a fake clip.
+- **Colour (number-blind shell):** colour statistics of the close-up (face percentiles, hue, saturation, background,
+  ratios) into a small network. Trained on training-photos plus the non-held scans: 185/241 held-back close-ups right
+  against the reader's whole-scan vote 220/241. Trained on every session but the judged one: test-14 103/115 (reader
+  98), test-13 19/25 (23), test-6 16/26 (26) - variety of real photos is what it lacks. As a second shell vote in the
+  replay (`colour` option in trace_replay, each session scored by a model that never saw it), at 0.8, 0.9 or 0.95:
+  right 196 -> 197, wrong 14 -> 14 (test-14 #83 N°22). On the not-certain test-14 scans it is sure of every dark piece
+  (p(milk) <= 0.001) but unsure of the fresh milk N°24 (0.15-0.72), 14 (0.21-0.73) and 11 (0.33-0.65): their colour is
+  genuinely ambiguous against what it has seen. Needs the reference round's fresh photos; nothing in the app.
+- **Slope finder** (`training/train_slope.js`, a small network asked which side the slope is on, trained on photos
+  turned a quarter at a time): run 1 46% of held-back close-ups turned four ways (6/9: 33 of 80); run 2 with the
+  training photos softened to the live close-ups' resolution 52-57% (best 57% after round 9). Not usable. The likely
+  reason is that turning a photo turns its light and camera viewpoint with it, so these are not real "turned
+  chocolate" examples - the sloped face shows up mainly as a reflection band whose look depends on where the light is.
+  The reference round's three new Turned choices (scanner-v67) give real ones under unchanged light: train and judge
+  on those. Nothing in the app.
