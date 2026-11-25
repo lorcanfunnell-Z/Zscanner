@@ -57,7 +57,17 @@ def jsvote(keys):
 def adiff(a, b):                                        # smallest gap between two angles, in degrees
     d = abs((a - b) % 360); return min(d, 360 - d)
 
-def late_pick(held, rule):
+def colour_fits(r, top, rule):
+    # 25 Nov experiment: a number-blind colour model's milk probability for this scan (rule["colour"] = {session: {scan n: p}},
+    # from the saved close-up, a proxy for a per-frame value), counted as a second shell vote when it is sure either way
+    c = rule.get("colour")
+    if not c or r is None: return False
+    p = c.get(r.get("_sess"), {}).get(str(r.get("n")))
+    if p is None: return False
+    want = META["shellOf"].get(top); th = rule.get("colourth", .9)
+    return (want == "milk" and p >= th) or (want == "dark" and p <= 1 - th)
+
+def late_pick(held, rule, r=None):
     # 24 Nov, the "late answer": when the stop comes with no certain answer, the whole scan is looked at once more. If the
     # chocoprint named the scan's likeliest chocolate on most held frames, the likeliest is well clear of the runner-up and
     # the shell colour over the whole scan fits, that chocolate is the answer; otherwise "not certain" and the chips as now.
@@ -69,7 +79,7 @@ def late_pick(held, rule):
         for k, p in h["top"]: avg[k] += p / len(held)
     (top, p1), *rest = avg.most_common(2) + [("", 0)]
     pshare = sum(1 for h in held if h.get("pmark") == zm(top)) / len(held)
-    sfit = META["shellOf"].get(top) == "milkwhite" or jsvote([h.get("shell") for h in held]) == META["shellOf"].get(top)
+    sfit = META["shellOf"].get(top) == "milkwhite" or jsvote([h.get("shell") for h in held]) == META["shellOf"].get(top) or colour_fits(r, top, rule)
     return top if pshare >= rule["late"] and p1 - rest[0][1] >= rule.get("lategap", .3) and sfit else None
 
 def run(rule, K=3, detail=False, L=None):
@@ -117,7 +127,7 @@ def run(rule, K=3, detail=False, L=None):
             if rule.get("logic", "full") != "none":            # the phone's logic check: shell (and mark) votes must fit
                 # N°20's milk+white shell is read unreliably (28 Oct fix) - the phone skips the shell-match
                 # requirement just for it, so this replay has to do the same to actually match app.js
-                shell_ok = META["shellOf"].get(top) == "milkwhite" or vote("shell") == META["shellOf"].get(top)
+                shell_ok = META["shellOf"].get(top) == "milkwhite" or vote("shell") == META["shellOf"].get(top) or colour_fits(r, top, rule)
                 ok = ok and shell_ok
                 if rule.get("logic", "full") == "full": ok = ok and vote("mark") == META["markOf"].get(top)
             # 23 Nov: the shell colour over EVERY held frame of the scan, not just the 0.6 s window. Why: on test-14 scan 116 the
@@ -138,16 +148,16 @@ def run(rule, K=3, detail=False, L=None):
             # from the first held frame of the trace; the phone's restarts if the chocolate jumps (resetHold), a small
             # difference the replay has never modelled.
             if rule.get("stop") and f["t"] >= rule["stop"] and len(win) >= 3:
-                if rule.get("late") and late_pick(held, rule): said = late_pick(held, rule); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
+                if rule.get("late") and late_pick(held, rule, r): said = late_pick(held, rule, r); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
                 break
             # 17 Nov: the live stop - 5 s of usable frames, or 10 s on the wall clock. The phone checks both on every frame,
             # rejected ones included; the trace holds only usable frames, so this replay stops at the next one - the same
             # outcome (no answer can come from a rejected frame), only the chips may differ by a frame
             if rule.get("stop_usable") and tu >= rule["stop_usable"] and len(win) >= 3:
-                if rule.get("late") and late_pick(held, rule): said = late_pick(held, rule); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
+                if rule.get("late") and late_pick(held, rule, r): said = late_pick(held, rule, r); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
                 break
             if rule.get("stop_wall") and f["t"] >= rule["stop_wall"] and len(win) >= 3:
-                if rule.get("late") and late_pick(held, rule): said = late_pick(held, rule); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
+                if rule.get("late") and late_pick(held, rule, r): said = late_pick(held, rule, r); at = f["t"] - held[0]["t"]; seen = {"late": True, "held": list(held)}
                 break
         out.append((r["truth"], said, at if said else None))
         full.append({"truth": r["truth"], "said": said, "at": at if said else None, "scan": r, "held": list(held), "seen": seen})
