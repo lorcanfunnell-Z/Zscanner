@@ -15,7 +15,13 @@
   const CONDS = [
     { id: "window", name: "By a window", tip: "Daylight from a window, not in direct sun" },
     { id: "lamp", name: "Under a lamp", tip: "Ceiling light or desk lamp, evening-style light" },
-    { id: "box", name: "Inside the box", tip: "In its place in the open box" }
+    { id: "box", name: "Inside the box", tip: "In its place in the open box" },
+    // 25 Nov (Julien's slope idea): every photo so far has the chocolate's one sloped side pointing away from the person
+    // holding the phone. These three record it turned, in ordinary room light; the light's id is in each file name
+    // (closeup/<chocolate>/<id>-<time>.jpg), so training/train_slope.js knows which way the slope points in each.
+    { id: "slope-towards", name: "Turned: slope towards you", tip: "Room light. Turn the chocolate so its sloped side faces you" },
+    { id: "slope-left", name: "Turned: slope to the left", tip: "Room light. Sloped side pointing to your left" },
+    { id: "slope-right", name: "Turned: slope to the right", tip: "Room light. Sloped side pointing to your right" }
   ];
   const PER = 8, GAP_MS = 300, MIN_SHARP = 45, MIN_LIGHT = 50, MIN_SIZE = 0.13;   // same thresholds as the live scanner (app.js)
   const PROMPTS = ["Hold the phone above it, number visible", "Tilt the phone a little each way", "A little closer, then a little further"];
